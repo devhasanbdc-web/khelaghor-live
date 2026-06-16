@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { 
   Tv, Radio, Search, RefreshCw, Star, Flame, Trophy, 
-  HelpCircle, Languages, LayoutGrid, CheckCircle2, AlertTriangle, ChevronRight, Activity, Shield, Wifi, Signal
+  HelpCircle, Languages, LayoutGrid, CheckCircle2, AlertTriangle, ChevronRight, Wifi
 } from 'lucide-react';
 import { Channel, SportCategory } from './types';
 import VideoPlayer from './components/VideoPlayer';
@@ -20,7 +20,7 @@ export default function App() {
   });
 
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [activeCategory, setActiveCategory] = useState<SportCategory>('fifa'); // Default to FIFA
+  const [activeCategory, setActiveCategory] = useState<SportCategory>('fifa');
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [cachedAt, setCachedAt] = useState<number | null>(null);
@@ -29,31 +29,10 @@ export default function App() {
   const [playlistLastUpdated, setPlaylistLastUpdated] = useState<string>('');
   const [playlistLastUpdatedBn, setPlaylistLastUpdatedBn] = useState<string>('');
   const [commitSha, setCommitSha] = useState<string>('');
-  const [internetSpeed, setInternetSpeed] = useState<number>(0);
+  const [internetSpeed, setInternetSpeed] = useState<number>(5);
   const [autoQuality, setAutoQuality] = useState<boolean>(true);
 
-  // FIFA Match Interface definition and reactive lists
-  const [fifaMatches, setFifaMatches] = useState<Array<{
-    id: string;
-    homeTeam: string;
-    homeTeamBn: string;
-    homeFlag: string;
-    awayTeam: string;
-    awayTeamBn: string;
-    awayFlag: string;
-    matchType: string;
-    matchTypeBn: string;
-    dateTime: string;
-    dateTimeBn: string;
-    dateLabel: string;
-    dateLabelBn: string;
-    status: 'live' | 'upcoming' | 'completed';
-    homeScore?: number;
-    awayScore?: number;
-    timeRemaining?: string;
-    timeRemainingBn?: string;
-    sortTimestamp?: number;
-  }>>([]);
+  const [fifaMatches, setFifaMatches] = useState<any[]>([]);
   const [loadingMatches, setLoadingMatches] = useState<boolean>(false);
 
   // Measure internet speed
@@ -67,10 +46,10 @@ export default function App() {
       const dataSize = response.headers.get('content-length') || '100000';
       const sizeInBits = parseInt(dataSize as string) * 8;
       const timeInSeconds = (endTime - startTime) / 1000;
-      const speed = sizeInBits / timeInSeconds / 1000000; // Mbps
-      setInternetSpeed(Math.round(speed));
+      const speed = sizeInBits / timeInSeconds / 1000000;
+      setInternetSpeed(Math.round(speed) || 5);
     } catch {
-      setInternetSpeed(0);
+      setInternetSpeed(5);
     }
   }, []);
 
@@ -90,13 +69,9 @@ export default function App() {
 
     setError(null);
     try {
-      // Measure internet speed
       await measureInternetSpeed();
-
-      // Concurrently parse the real fixtures!
       fetchFifaMatches(forceRefresh);
 
-      // Direct call to our custom premium server endpoint
       const response = await fetch(`/api/channels${forceRefresh ? '?force=true' : ''}`);
       if (!response.ok) {
         throw new Error(`Failed to load: ${response.statusText}`);
@@ -108,9 +83,7 @@ export default function App() {
       setPlaylistLastUpdatedBn(data.playlistLastUpdatedBn || '');
       setCommitSha(data.commitSha || '');
 
-      // Set default video - prioritize FIFA World Cup channels
       if (data.channels && data.channels.length > 0 && !selectedChannel) {
-        // First try to find FIFA World Cup channels
         const fifaChannels = data.channels.filter((ch: Channel) => ch.isFifa);
         const liveFifaChannels = fifaChannels.filter((ch: Channel) => ch.isLive);
         
@@ -120,14 +93,13 @@ export default function App() {
         } else if (fifaChannels.length > 0) {
           defaultCh = fifaChannels[0];
         } else {
-          // Fallback to any live channel
           defaultCh = data.channels.find((ch: Channel) => ch.isLive) || data.channels[0];
         }
         setSelectedChannel(defaultCh);
       }
     } catch (err: any) {
       console.error("Fetch channels error:", err);
-      setError("চ্যানেল তালিকা লোড করতে ব্যর্থ হয়েছে। দয়া করে পুনঃচেষ্টা করুন। (Could not load IPTV playlist)");
+      setError("চ্যানেল তালিকা লোড করতে ব্যর্থ হয়েছে। দয়া করে পুনঃচেষ্টা করুন।");
     } finally {
       setLoading(false);
       setIsRefreshing(false);
@@ -136,16 +108,13 @@ export default function App() {
 
   useEffect(() => {
     fetchChannels();
-
-    // Auto update live scores every 60 seconds
     const timer = setInterval(() => {
       fetchFifaMatches();
-      measureInternetSpeed(); // Re-measure speed periodically
+      measureInternetSpeed();
     }, 60000);
     return () => clearInterval(timer);
   }, []);
 
-  // Sync favorites with localStorage
   const handleToggleFavorite = (id: string) => {
     setFavorites((prev) => {
       const updated = prev.includes(id) 
@@ -156,7 +125,6 @@ export default function App() {
     });
   };
 
-  // Auto play next channel if current channel fails
   const handleChannelError = useCallback(() => {
     if (!selectedChannel || filteredChannels.length <= 1) return;
     
@@ -167,7 +135,6 @@ export default function App() {
     }
   }, [selectedChannel, filteredChannels]);
 
-  // Switch to next/previous channel
   const playNextChannel = () => {
     if (!selectedChannel || filteredChannels.length <= 1) return;
     const currentIndex = filteredChannels.findIndex(ch => ch.id === selectedChannel.id);
@@ -186,7 +153,6 @@ export default function App() {
     }
   };
 
-  // FIFA matches fetching
   const fetchFifaMatches = async (force = false) => {
     setLoadingMatches(true);
     try {
@@ -196,72 +162,34 @@ export default function App() {
         setFifaMatches(data.matches || []);
       }
     } catch (err) {
-      console.error("Failed to fetch real-time FIFA matches:", err);
+      console.error("Failed to fetch FIFA matches:", err);
     } finally {
       setLoadingMatches(false);
     }
   };
 
-  // Dynamically sorted schedule list
-  const sortedFifaMatches = useMemo(() => {
-    return [...fifaMatches].sort((a, b) => {
-      if (a.status === 'live' && b.status !== 'live') return -1;
-      if (a.status !== 'live' && b.status === 'live') return 1;
-      if (a.status === 'upcoming' && b.status === 'completed') return -1;
-      if (a.status === 'completed' && b.status === 'upcoming') return 1;
-
-      const tsA = a.sortTimestamp ?? Infinity;
-      const tsB = b.sortTimestamp ?? Infinity;
-      if (a.status === 'upcoming' && b.status === 'upcoming') {
-        return tsA - tsB;
-      }
-      if (a.status === 'completed' && b.status === 'completed') {
-        return tsB - tsA;
-      }
-      return tsA - tsB;
-    });
-  }, [fifaMatches]);
-
-  // Helpers to structure channels based on user filters
   const processedChannels = useMemo(() => {
     const list = channels.map(ch => ({
       ...ch,
       isFav: favorites.includes(ch.id)
     }));
 
-    // Auto-sort to guarantee LIVE FIFA matches are ALWAYS at the top
     return [...list].sort((a, b) => {
       const getScore = (ch: typeof a) => {
         let score = 0;
-
-        // 0. FIFA World Cup channels get the absolute highest priority
-        if (ch.isFifa) {
-          score += 50000;
-        }
-
-        // 1. Live status gets highest sorting weight
-        if (ch.isLive) {
-          score += 10000;
-        }
-
+        if (ch.isFifa) score += 50000;
+        if (ch.isLive) score += 10000;
         const gLower = (ch.group || "").toLowerCase();
         const nLower = (ch.name || "").toLowerCase();
-
-        // 2. High priority match play and live event packages
         if (gLower.includes("live event") || gLower.includes("bdix") || gLower.includes("fifa")) {
           score += 5000;
         }
-
-        // 3. Premium targeted live sports channels
         if (nLower.includes("[bd]") || nLower.includes("sports hd") || nLower.includes("t sports") || nLower.toLowerCase().includes("btv")) {
           score += 3000;
         }
-
-        // 4. Any general cricket or football tag
         if (ch.isCricket || ch.isFootball || ch.isFifa) {
           score += 1000;
         }
-
         return score;
       };
 
@@ -274,7 +202,6 @@ export default function App() {
     });
   }, [channels, favorites]);
 
-  // Filters by Category & Search query matching
   const filteredChannels = useMemo(() => {
     return processedChannels.filter((ch) => {
       const matchesSearch = 
@@ -293,7 +220,6 @@ export default function App() {
     });
   }, [processedChannels, activeCategory, searchQuery]);
 
-  // Split matches for layout sections
   const hotLiveChannels = useMemo(() => {
     return processedChannels.filter(ch => ch.isLive && (ch.isCricket || ch.isFootball || ch.isFifa)).slice(0, 10);
   }, [processedChannels]);
@@ -318,7 +244,6 @@ export default function App() {
     return processedChannels.filter(ch => ch.isFav);
   }, [processedChannels]);
 
-  // Get flag/emoji of country code
   const getCountryEmoji = (code: string) => {
     if (!code || code === 'un') return '🌐';
     const codePoints = code
@@ -332,7 +257,6 @@ export default function App() {
     }
   };
 
-  // Convert last fetched to neat counter format
   const getRelativeFetchTime = () => {
     if (!cachedAt) return "";
     const secondsAgo = Math.floor((Date.now() - cachedAt) / 1000);
@@ -344,6 +268,27 @@ export default function App() {
       ? `${minutesAgo} মিনিট আগে আপডেট হয়েছে` 
       : `${minutesAgo}m ago`;
   };
+
+  // Show error if no channels
+  if (!loading && channels.length === 0 && !error) {
+    return (
+      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center p-8">
+        <div className="text-center max-w-md">
+          <Tv className="w-16 h-16 text-zinc-600 mx-auto mb-4" />
+          <h2 className="text-xl font-bold mb-2">কোন চ্যানেল পাওয়া যায়নি</h2>
+          <p className="text-zinc-400 text-sm mb-4">
+            {isBengali ? "সার্ভার থেকে চ্যানেল তালিকা লোড করা যায়নি।" : "Could not load channel list from server."}
+          </p>
+          <button 
+            onClick={() => fetchChannels(true)}
+            className="px-6 py-2 bg-lime-500 text-zinc-950 rounded-xl font-bold hover:bg-lime-400 transition"
+          >
+            {isBengali ? "পুনরায় চেষ্টা করুন" : "Retry"}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans selection:bg-lime-500 selection:text-zinc-950">
@@ -377,14 +322,10 @@ export default function App() {
           </div>
 
           <div className="flex items-center w-full sm:w-auto gap-2.5">
-            {/* Internet Speed Indicator */}
             <div className="hidden sm:flex items-center gap-1.5 bg-zinc-900/80 px-3 py-1.5 rounded-xl border border-zinc-800">
               <Wifi className={`w-4 h-4 ${internetSpeed > 5 ? 'text-lime-400' : internetSpeed > 2 ? 'text-yellow-400' : 'text-red-400'}`} />
               <span className="text-[10px] font-mono text-zinc-300">
                 {internetSpeed > 0 ? `${internetSpeed} Mbps` : '...'}
-              </span>
-              <span className="text-[8px] text-zinc-500 font-mono">
-                {autoQuality ? `Auto: ${getAutoQuality(internetSpeed)}` : 'Manual'}
               </span>
             </div>
 
@@ -405,7 +346,6 @@ export default function App() {
               onClick={() => fetchChannels(true)}
               disabled={isRefreshing}
               className="p-2.5 bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700/80 rounded-xl text-zinc-400 hover:text-white transition duration-200 active:scale-95 flex items-center gap-1.5"
-              title={isBengali ? "স্ট্রিমিং লিঙ্ক রিফ্রেশ করুন" : "Refresh M3U source"}
             >
               <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-lime-400' : ''}`} />
             </button>
@@ -432,10 +372,10 @@ export default function App() {
               {error}
             </div>
             <button 
-              onClick={() => fetchChannels()}
+              onClick={() => fetchChannels(true)}
               className="px-4 py-1.5 bg-red-500 text-zinc-950 font-bold hover:bg-red-400 text-[10px] rounded-lg cursor-pointer transition active:scale-95"
             >
-              পুনরায় চেষ্টা করুন (Retry)
+              {isBengali ? "পুনরায় চেষ্টা করুন" : "Retry"}
             </button>
           </div>
         )}
@@ -448,19 +388,16 @@ export default function App() {
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-lime-500"></span>
               </span>
               <span className="font-bold text-zinc-300">
-                {isBengali 
-                  ? `ফিফা বিশ্বকাপ লাইভ স্ট্রিম (অটো-সিঙ্ক)` 
-                  : `FIFA World Cup Live Streams (Auto-synced)`}
+                {isBengali ? "ফিফা বিশ্বকাপ লাইভ স্ট্রিম" : "FIFA World Cup Live Streams"}
               </span>
             </div>
             
             {(playlistLastUpdated || playlistLastUpdatedBn) && (
               <div className="text-[10px] text-zinc-500 flex items-center gap-1.5 pl-4 flex-wrap">
-                <Shield className="w-3 h-3 text-lime-500/85" />
                 <span>
                   {isBengali 
-                    ? `সর্বশেষ গিটহাব আপডেট: ${playlistLastUpdatedBn || playlistLastUpdated}` 
-                    : `Latest GitHub Commit: ${playlistLastUpdated || playlistLastUpdatedBn}`}
+                    ? `সর্বশেষ আপডেট: ${playlistLastUpdatedBn || playlistLastUpdated}` 
+                    : `Latest Update: ${playlistLastUpdated || playlistLastUpdatedBn}`}
                 </span>
               </div>
             )}
@@ -468,7 +405,7 @@ export default function App() {
           
           <div className="font-mono text-[10px] flex items-center justify-between md:justify-end gap-3 border-t border-zinc-900 md:border-t-0 pt-2 md:pt-0">
             <span className="text-zinc-400">
-              {isBengali ? "মোট উপলব্ধ চ্যানেল:" : "Total Live Channels:"}{" "}
+              {isBengali ? "মোট উপলব্ধ চ্যানেল:" : "Total Channels:"}{" "}
               <span className="text-lime-400 font-extrabold text-xs">{channels.length}</span>
             </span>
             {cachedAt && (
@@ -493,9 +430,7 @@ export default function App() {
             </h3>
             
             <p className="text-xs text-zinc-400 max-w-md text-center mb-6 leading-relaxed">
-              {isBengali 
-                ? "ফিফা বিশ্বকাপের লাইভ স্ট্রিমিং চ্যানেলগুলি লোড করা হচ্ছে..." 
-                : "Loading FIFA World Cup live streaming channels..."}
+              {isBengali ? "ফিফা বিশ্বকাপের লাইভ স্ট্রিমিং চ্যানেলগুলি লোড করা হচ্ছে..." : "Loading FIFA World Cup live streaming channels..."}
             </p>
           </div>
         ) : (
@@ -535,7 +470,7 @@ export default function App() {
                       </div>
                       
                       <div className="text-right">
-                        <span className="text-xs text-zinc-400 block font-mono">GROUP / CATEGORY</span>
+                        <span className="text-xs text-zinc-400 block font-mono">GROUP</span>
                         <span className="text-xs text-lime-400 font-bold bg-zinc-850 px-3 py-1.5 rounded-xl border border-zinc-800 block mt-1">
                           {selectedChannel.group}
                         </span>
@@ -545,12 +480,11 @@ export default function App() {
                 ) : (
                   <div className="w-full aspect-video rounded-2xl bg-zinc-900 border border-zinc-800 flex flex-col items-center justify-center p-6 text-center">
                     <Tv className="w-12 h-12 text-zinc-600 mb-3" />
-                    <p className="text-sm text-zinc-400 font-medium">কোন চ্যানেল নির্বাচিত হয়নি (No Channel Selected)</p>
-                    <p className="text-xs text-zinc-500 mt-1">নীচের লাইভ তালিকা থেকে একটি বেছে নিন</p>
+                    <p className="text-sm text-zinc-400 font-medium">কোন চ্যানেল নির্বাচিত হয়নি</p>
                   </div>
                 )}
 
-                {/* FIFA World Cup Live Match Hub Banner */}
+                {/* FIFA World Cup Hub */}
                 <div className="p-5 rounded-3xl bg-gradient-to-br from-amber-500/10 via-amber-600/5 to-zinc-950 border border-amber-500/20 shadow-xl relative overflow-hidden">
                   <div className="absolute top-2 right-2 opacity-5 pointer-events-none transform translate-x-4 -translate-y-4 scale-150">
                     <Trophy className="w-48 h-48 text-amber-500" />
@@ -568,13 +502,8 @@ export default function App() {
                         </span>
                       </div>
                       <h3 className="text-base lg:text-lg font-black tracking-tight text-white flex items-center gap-2 mt-1">
-                        🏆 {isBengali ? "ফিফা বিশ্বকাপ সরাসরি সম্প্রচার কেন্দ্র" : "FIFA World Cup Live Broadcast Hub"}
+                        🏆 {isBengali ? "ফিফা বিশ্বকাপ সরাসরি সম্প্রচার" : "FIFA World Cup Live Broadcast"}
                       </h3>
-                      <p className="text-xs text-zinc-400 max-w-xl">
-                        {isBengali
-                          ? "ফিফা ওয়ার্ল্ড কাপের সমস্ত ম্যাচ, সরাসরি সম্প্রচার, কাস্টম ফিড ও বিশেষ স্পোর্টস টিভি চ্যানেলগুলি ট্র্যাকার। এক ক্লিকে খেলা উপভোগ করুন!"
-                          : "All FIFA World Cup matches, live coverages, custom feeds, and exclusive TV channels aggregated in real-time."}
-                      </p>
                     </div>
 
                     <button
@@ -582,7 +511,7 @@ export default function App() {
                       onClick={() => setActiveCategory('fifa')}
                       className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-black text-xs rounded-xl shadow-lg shadow-amber-500/10 hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer self-start sm:self-center"
                     >
-                      {isBengali ? "বিশ্বকাপ চ্যানেলগুলো দেখুন" : "View World Cup Feeds"}
+                      {isBengali ? "বিশ্বকাপ চ্যানেল দেখুন" : "View World Cup"}
                     </button>
                   </div>
 
@@ -608,7 +537,7 @@ export default function App() {
                               <span className="text-xl">🏆</span>
                               <div>
                                 <h4 className="text-xs font-black line-clamp-1 text-zinc-200">{ch.name}</h4>
-                                <p className="text-[10px] text-zinc-500 mt-0.5">{getCountryEmoji(ch.countryCode)} {ch.country} • Live Stream</p>
+                                <p className="text-[10px] text-zinc-500 mt-0.5">{getCountryEmoji(ch.countryCode)} {ch.country}</p>
                               </div>
                             </div>
                             <span className="flex h-2 w-2 relative">
@@ -619,22 +548,16 @@ export default function App() {
                         );
                       })
                     ) : (
-                      <div className="sm:col-span-2 p-4 bg-zinc-900/20 border border-zinc-900/65 rounded-2xl text-center flex flex-col items-center justify-center">
-                        <div className="flex items-center gap-2 text-amber-500 font-bold text-xs mb-1.5">
-                          <AlertTriangle className="w-4 h-4 text-amber-500 animate-bounce" />
-                          <span>{isBengali ? "লাইভ বিশ্বকাপ ম্যাচ শুরু হওয়ার অপেক্ষা" : "Awaiting Kickoff of Live Match"}</span>
-                        </div>
-                        <p className="text-[10px] text-zinc-500 leading-relaxed max-w-lg">
-                          {isBengali
-                            ? "বর্তমানে সরাসরি কোনো ফিফা নির্দিষ্ট ম্যাচ শুরু হয়নি। তবে নিচে খেলাঘরের প্রধান ফুটবল চ্যানেলগুলোর সাহায্যে বিশ্বকাপ প্রস্তুতি ম্যাচ বা অন্যান্য লীগের লাইভ খেলা এখনি দেখতে পারেন!"
-                            : "No active FIFA matches are live streaming at this second. Feeds activate on demand as per schedule."}
+                      <div className="sm:col-span-2 p-4 bg-zinc-900/20 border border-zinc-900/65 rounded-2xl text-center">
+                        <p className="text-[10px] text-zinc-500">
+                          {isBengali ? "কোন ফিফা চ্যানেল পাওয়া যায়নি" : "No FIFA channels available"}
                         </p>
                       </div>
                     )}
                   </div>
                 </div>
 
-                {/* HORIZONTAL CAROUSEL - "HOT 🔴" LIVE MATCHES */}
+                {/* HOT LIVE CHANNELS */}
                 {hotLiveChannels.length > 0 && (
                   <div className="mt-2 text-zinc-100">
                     <div className="flex items-center gap-2 mb-3.5 px-1">
@@ -660,7 +583,7 @@ export default function App() {
                             }`}
                           >
                             <div className="flex items-start justify-between gap-1 mb-2">
-                              <span className="text-xs bg-zinc-850/90 px-2 py-1 rounded-md text-zinc-300 border border-zinc-800 flex items-center gap-1" title={ch.country}>
+                              <span className="text-xs bg-zinc-850/90 px-2 py-1 rounded-md text-zinc-300 border border-zinc-800 flex items-center gap-1">
                                 <span>{getCountryEmoji(ch.countryCode)}</span>
                                 <span className="font-sans text-[10px] text-zinc-400 font-semibold uppercase">{ch.countryCode}</span>
                               </span>
@@ -688,13 +611,14 @@ export default function App() {
 
               </div>
 
+              {/* SIDEBAR */}
               <div className="flex flex-col gap-4">
                 
                 <div className="bg-zinc-900/50 p-3 rounded-2xl border border-zinc-900">
                   <span className="text-[10px] font-bold text-zinc-500 uppercase block mb-2 px-1 font-mono tracking-wider">
-                    {isBengali ? "সম্প্রচার ক্যাটাগরি" : "Filter Sports Feed"}
+                    {isBengali ? "সম্প্রচার ক্যাটাগরি" : "Filter Sports"}
                   </span>
-                  <div className="grid grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-2">
                     
                     <button
                       id="cat-all"
@@ -706,7 +630,7 @@ export default function App() {
                       }`}
                     >
                       <LayoutGrid className="w-4 h-4" />
-                      <span>{isBengali ? "অ্যাকশন অল" : "All Channels"}</span>
+                      <span>{isBengali ? "সব" : "All"}</span>
                     </button>
 
                     <button
@@ -719,7 +643,7 @@ export default function App() {
                       }`}
                     >
                       <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
-                      <span>{isBengali ? "হট লাইভ" : "Running Live"}</span>
+                      <span>{isBengali ? "লাইভ" : "Live"}</span>
                     </button>
 
                     <button
@@ -732,7 +656,7 @@ export default function App() {
                       }`}
                     >
                       <span className="text-sm">🏏</span>
-                      <span>{isBengali ? "ক্রিকেট সরাসরি" : "Cricket"}</span>
+                      <span>{isBengali ? "ক্রিকেট" : "Cricket"}</span>
                     </button>
 
                     <button
@@ -745,13 +669,13 @@ export default function App() {
                       }`}
                     >
                       <span className="text-sm">⚽</span>
-                      <span>{isBengali ? "ফুটবল সরাসরি" : "Football"}</span>
+                      <span>{isBengali ? "ফুটবল" : "Football"}</span>
                     </button>
 
                     <button
                       id="cat-fifa"
                       onClick={() => setActiveCategory('fifa')}
-                      className={`px-3 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition duration-150 col-span-2 lg:col-span-1 xl:col-span-2 ${
+                      className={`px-3 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition duration-150 col-span-2 ${
                         activeCategory === 'fifa'
                           ? 'bg-amber-500 text-zinc-950 font-black shadow-lg shadow-amber-500/20'
                           : 'bg-zinc-900 border border-amber-500/20 text-amber-400 hover:bg-amber-950/20'
@@ -761,54 +685,26 @@ export default function App() {
                       <span>{isBengali ? "ফিফা বিশ্বকাপ" : "FIFA World Cup"}</span>
                       {fifaChannels.length > 0 && (
                         <span className="ml-auto text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full font-bold">
-                          {fifaChannels.length} Live
+                          {fifaChannels.length}
                         </span>
                       )}
                     </button>
 
                   </div>
-
-                  <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-zinc-850">
-                    <button
-                      id="cat-other"
-                      onClick={() => setActiveCategory('other')}
-                      className={`px-2 py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition duration-150 ${
-                        activeCategory === 'other'
-                          ? 'bg-zinc-800 text-lime-400 border border-lime-500/20'
-                          : 'bg-zinc-950/50 text-zinc-400 hover:text-white'
-                      }`}
-                    >
-                      <Tv className="w-3.5 h-3.5" />
-                      <span>{isBengali ? "অন্যান্য টিভি" : "Others"}</span>
-                    </button>
-
-                    <button
-                      id="cat-favorites"
-                      onClick={() => {
-                        setActiveCategory('all');
-                        setSearchQuery('');
-                        const el = document.getElementById('favs-section');
-                        if (el) el.scrollIntoView({ behavior: 'smooth' });
-                      }}
-                      className="px-2 py-2 bg-zinc-950/50 hover:bg-zinc-850 text-zinc-400 hover:text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition"
-                    >
-                      <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-                      <span>{isBengali ? "প্রিয় তালিকা" : "Favorites"} ({favorites.length})</span>
-                    </button>
-                  </div>
                 </div>
 
+                {/* CHANNEL LIST */}
                 <div className="bg-zinc-900/50 rounded-2xl border border-zinc-900 overflow-hidden flex flex-col flex-grow min-h-[420px] max-h-[580px]">
                   
                   <div className="p-3 bg-zinc-900 border-b border-zinc-850 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Trophy className="w-4 h-4 text-lime-400" />
                       <span className="text-xs font-bold font-sans">
-                        {isBengali ? "চ্যানেল ডিরেক্টরি" : "Match Channels"}
+                        {isBengali ? "চ্যানেল তালিকা" : "Channels"}
                       </span>
                     </div>
                     <span className="text-[10px] font-mono bg-zinc-800 px-2 py-0.5 rounded text-zinc-400">
-                      {filteredChannels.length} / {channels.length}
+                      {filteredChannels.length}
                     </span>
                   </div>
 
@@ -817,7 +713,6 @@ export default function App() {
                       <div className="p-10 text-center flex flex-col items-center justify-center">
                         <Tv className="w-8 h-8 text-zinc-700 mb-2" />
                         <h4 className="text-zinc-500 text-xs font-bold">চ্যানেল পাওয়া যায়নি</h4>
-                        <p className="text-[10px] text-zinc-600 mt-1">অন্য ক্যাটাগরি বা কীওয়ার্ড চেষ্টা করুন</p>
                       </div>
                     ) : (
                       filteredChannels.map((ch) => {
@@ -859,8 +754,6 @@ export default function App() {
                                 </h4>
                                 <div className="flex items-center gap-1.5 mt-1 font-sans text-[10px] text-zinc-500">
                                   <span>{getCountryEmoji(ch.countryCode)} {ch.country}</span>
-                                  <span className="text-zinc-700">•</span>
-                                  <span className="uppercase text-[9px] font-mono tracking-wider">{ch.group}</span>
                                 </div>
                               </div>
                             </div>
@@ -868,16 +761,13 @@ export default function App() {
                             <div className="flex flex-col items-end gap-1 flex-shrink-0">
                               {ch.isLive ? (
                                 <span className="flex items-center gap-1 bg-red-600 px-1.5 py-0.5 rounded text-[8px] text-white font-extrabold tracking-wider animate-pulse uppercase">
-                                  <span>LIVE</span>
+                                  LIVE
                                 </span>
                               ) : (
                                 <span className="bg-zinc-900 border border-zinc-800 text-[8px] text-zinc-500 px-1.5 py-0.5 rounded uppercase font-bold">
                                   OFFLINE
                                 </span>
                               )}
-                              <span className="text-[10px] text-zinc-600 font-bold uppercase tracking-wider font-mono">
-                                {ch.isFifa ? "🏆 FIFA" : ch.isCricket ? "🏏 Cricket" : ch.isFootball ? "⚽ Football" : "📺 General"}
-                              </span>
                             </div>
                           </div>
                         );
@@ -891,6 +781,7 @@ export default function App() {
               
             </div>
 
+            {/* BOTTOM SECTIONS */}
             <div className="space-y-4 pt-4 border-t border-zinc-900">
               
               {favoriteChannels.length > 0 && (
@@ -898,7 +789,7 @@ export default function App() {
                   <div className="flex items-center gap-2 mb-4">
                     <Star className="w-5 h-5 text-rose-500 fill-rose-500" />
                     <h3 className="text-base font-black uppercase text-rose-400">
-                      {isBengali ? "আপনার প্রিয় চ্যানেল সমূহ" : "Your Favorite Channels"}
+                      {isBengali ? "আপনার প্রিয় চ্যানেল" : "Your Favorite Channels"}
                     </h3>
                     <span className="text-xs bg-rose-500/10 border border-rose-500/20 text-rose-400 px-2.5 py-0.5 rounded-full font-bold">
                       {favoriteChannels.length}
@@ -936,83 +827,6 @@ export default function App() {
                 </div>
               )}
 
-              <div className="bg-gradient-to-r from-amber-500/10 via-amber-600/5 to-zinc-950 p-6 rounded-3xl border border-amber-500/20 shadow-md">
-                <div className="flex items-center justify-between mb-4 pb-2 border-b border-zinc-900">
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-2xl animate-bounce self-center">🏆</span>
-                    <div>
-                      <h3 className="text-sm font-black uppercase text-amber-400 tracking-wide flex items-center gap-2">
-                        {isBengali ? "ফিফা বিশ্বকাপ ডেডিকেটেড সম্প্রচার" : "FIFA World Cup Streams"}
-                        <span className="bg-red-500 text-white font-mono text-[9px] px-1.5 py-0.5 rounded animate-pulse">DIRECT</span>
-                      </h3>
-                      <p className="text-[10px] text-zinc-400 font-sans">
-                        {isBengali ? "সরাসরি মাঠ থেকে লাইভ হাই ডেফিনিশন ফিড ও পার্টনার টিভি চ্যানেল সমূহ" : "High-definition camera streams & official broadcasting partners"}
-                      </p>
-                    </div>
-                  </div>
-                  <span className="text-xs font-bold text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20">
-                    {fifaChannels.length > 0 ? `${fifaChannels.length} Feeds Match` : "Broadcast Tracker Live"}
-                  </span>
-                </div>
-
-                {fifaChannels.length === 0 ? (
-                  <div className="p-8 text-center bg-zinc-900/10 border border-zinc-900/60 rounded-2xl flex flex-col items-center justify-center">
-                    <Trophy className="w-8 h-8 text-amber-500/30 mb-2" />
-                    <h4 className="text-xs text-zinc-300 font-bold">{isBengali ? "ফিফা বিশ্বকাপের সরাসরি স্ট্রিমসমূহ" : "FIFA Streaming Channels Ready"}</h4>
-                    <p className="text-[10px] text-zinc-500 mt-1 max-w-xl">
-                      {isBengali 
-                        ? "এই মুহূর্তে সরাসরি ফিফা বিশ্বকাপ শুরু হয়নি। তবে নিচে খেলাঘরের প্রধান ফুটবল চ্যানেলগুলোর সাহায্যে বিশ্বকাপ প্রস্তুতি ম্যাচ বা অন্যান্য লীগের লাইভ খেলা এখনি দেখতে পারেন!" 
-                        : "No active FIFA feeds parsed right now. Broadcast triggers as soon as the matches go live on the official channels."}
-                    </p>
-                    
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-4 w-full">
-                      {processedChannels.filter(ch => ch.isFootball).slice(0, 4).map(ch => (
-                        <div
-                          id={`fifa-bento-fb-${ch.id}`}
-                          key={ch.id}
-                          onClick={() => {
-                            setSelectedChannel(ch);
-                            window.scrollTo({ top: 120, behavior: 'smooth' });
-                          }}
-                          className="p-2.5 bg-zinc-900 hover:bg-zinc-850 rounded-xl text-center border border-zinc-800/60 cursor-pointer transition text-[11px] font-bold text-zinc-300 hover:text-white truncate"
-                        >
-                          <span className="mr-1">⚽</span> {ch.name}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    {fifaChannels.map(ch => (
-                      <div
-                        id={`fifa-grid-ch-${ch.id}`}
-                        key={ch.id}
-                        onClick={() => {
-                          setSelectedChannel(ch);
-                          window.scrollTo({ top: 120, behavior: 'smooth' });
-                        }}
-                        className={`p-3.5 rounded-2xl border text-left cursor-pointer transition flex items-center justify-between ${
-                          selectedChannel?.id === ch.id 
-                            ? 'bg-amber-500/10 border-amber-500 text-amber-400' 
-                            : 'bg-zinc-900/40 hover:bg-zinc-900 border-zinc-900 hover:border-amber-500/25'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 items-center justify-center bg-zinc-950 p-1 rounded-xl flex border border-zinc-800 flex-shrink-0">
-                            {ch.logo ? <img src={ch.logo} className="w-full h-full object-contain" alt="" referrerPolicy="no-referrer" /> : <Trophy className="w-4 h-4 text-amber-500" />}
-                          </div>
-                          <div>
-                            <h4 className="text-xs font-black text-zinc-200 line-clamp-1">{ch.name}</h4>
-                            <p className="text-[10px] text-zinc-500 mt-0.5">{getCountryEmoji(ch.countryCode)} {ch.country}</p>
-                          </div>
-                        </div>
-                        <span className="animate-ping w-1.5 h-1.5 rounded-full bg-red-500" />
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 
                 <div className="bg-zinc-900/25 p-5 rounded-2xl border border-zinc-900">
@@ -1020,22 +834,19 @@ export default function App() {
                     <div className="flex items-center gap-2.5">
                       <span className="text-xl">🏏</span>
                       <div>
-                        <h3 className="text-sm font-black uppercase text-white tracking-wide">
-                          {isBengali ? "ক্রিকেট সম্প্রচার সরাসরি" : "Cricket Sports Cast"}
+                        <h3 className="text-sm font-black uppercase text-white">
+                          {isBengali ? "ক্রিকেট" : "Cricket"}
                         </h3>
-                        <p className="text-[10px] text-zinc-500 font-sans">
-                          {isBengali ? "বিশ্বকাপ, লাইভ সিরিজ ও খেলার চ্যানেল" : "Live Series, T20s and Sports TV"}
-                        </p>
                       </div>
                     </div>
                     <span className="text-xs font-bold text-lime-400 bg-lime-500/10 px-2.5 py-1 rounded-lg">
-                      {cricketChannels.length} TV
+                      {cricketChannels.length}
                     </span>
                   </div>
 
                   {cricketChannels.length === 0 ? (
                     <div className="p-10 text-center text-zinc-600 text-xs">
-                      {isBengali ? "কোন ক্রিকেট চ্যানেল তথ্য নেই" : "No Cricket channels found"}
+                      {isBengali ? "কোন ক্রিকেট চ্যানেল নেই" : "No Cricket channels"}
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[300px] overflow-y-auto pr-1.5 custom-scrollbar">
@@ -1055,11 +866,7 @@ export default function App() {
                         >
                           <div className="flex items-center justify-between gap-1">
                             <h4 className="text-[11px] font-bold text-zinc-200 line-clamp-1">{ch.name}</h4>
-                            <span className="text-[11px] flex-shrink-0" title={ch.country}>{getCountryEmoji(ch.countryCode)}</span>
-                          </div>
-                          <div className="flex items-center justify-between mt-1 text-[9px] text-zinc-500">
-                            <span>{ch.country}</span>
-                            {ch.isLive && <span className="text-red-400 font-bold tracking-wider uppercase">🔴 LIVE</span>}
+                            <span className="text-[11px] flex-shrink-0">{getCountryEmoji(ch.countryCode)}</span>
                           </div>
                         </div>
                       ))}
@@ -1072,22 +879,19 @@ export default function App() {
                     <div className="flex items-center gap-2.5">
                       <span className="text-xl">⚽</span>
                       <div>
-                        <h3 className="text-sm font-black uppercase text-white tracking-wide">
-                          {isBengali ? "ফুটবল সম্প্রচার সরাসরি" : "Football Sports Cast"}
+                        <h3 className="text-sm font-black uppercase text-white">
+                          {isBengali ? "ফুটবল" : "Football"}
                         </h3>
-                        <p className="text-[10px] text-zinc-500 font-sans">
-                          {isBengali ? "প্রিমিয়ার লীগ, লা লিগা ও ফুটবল বিশ্ব টিভি" : "Leagues, Champions Cup and football feeds"}
-                        </p>
                       </div>
                     </div>
                     <span className="text-xs font-bold text-lime-400 bg-lime-500/10 px-2.5 py-1 rounded-lg">
-                      {footballChannels.length} TV
+                      {footballChannels.length}
                     </span>
                   </div>
 
                   {footballChannels.length === 0 ? (
                     <div className="p-10 text-center text-zinc-600 text-xs">
-                      {isBengali ? "কোন ফুটবল চ্যানেল তথ্য নেই" : "No Football channels found"}
+                      {isBengali ? "কোন ফুটবল চ্যানেল নেই" : "No Football channels"}
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[300px] overflow-y-auto pr-1.5 custom-scrollbar">
@@ -1107,11 +911,7 @@ export default function App() {
                         >
                           <div className="flex items-center justify-between gap-1">
                             <h4 className="text-[11px] font-bold text-zinc-200 line-clamp-1">{ch.name}</h4>
-                            <span className="text-[11px] flex-shrink-0" title={ch.country}>{getCountryEmoji(ch.countryCode)}</span>
-                          </div>
-                          <div className="flex items-center justify-between mt-1 text-[9px] text-zinc-500">
-                            <span>{ch.country}</span>
-                            {ch.isLive && <span className="text-red-400 font-bold tracking-wider uppercase">🔴 LIVE</span>}
+                            <span className="text-[11px] flex-shrink-0">{getCountryEmoji(ch.countryCode)}</span>
                           </div>
                         </div>
                       ))}
@@ -1121,76 +921,39 @@ export default function App() {
 
               </div>
 
-              {otherChannels.length > 0 && (
-                <div className="bg-zinc-900/10 p-5 rounded-2xl border border-zinc-900">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Radio className="w-5 h-5 text-lime-400" />
-                    <h3 className="text-sm font-black uppercase text-white">
-                      {isBengali ? "অন্যান্য বিনোদন ও সংবাদ টিভি" : "Other Entertainment & News Streams"}
-                    </h3>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2">
-                    {otherChannels.slice(0, 24).map(ch => (
-                      <div
-                        id={`other-grid-ch-${ch.id}`}
-                        key={ch.id}
-                        onClick={() => {
-                          setSelectedChannel(ch);
-                          window.scrollTo({ top: 120, behavior: 'smooth' });
-                        }}
-                        className={`p-2 rounded-xl text-center cursor-pointer border text-xs truncate ${
-                          selectedChannel?.id === ch.id
-                            ? 'bg-lime-500 text-zinc-950 font-bold border-lime-500'
-                            : 'bg-zinc-900/40 hover:bg-zinc-900 border-zinc-900 hover:-translate-y-0.5 transition duration-150'
-                        }`}
-                        title={ch.name}
-                      >
-                        <span className="mr-1">{getCountryEmoji(ch.countryCode)}</span> {ch.name}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
             </div>
           </>
         )}
 
+        {/* FOOTER */}
         <div className="mt-8 bg-zinc-900/40 border border-zinc-900 p-6 rounded-3xl grid grid-cols-1 md:grid-cols-3 gap-6 text-xs text-zinc-400">
           <div className="space-y-2">
             <h4 className="text-white font-bold flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-lime-400" />
-              {isBengali ? "স্বয়ংক্রিয় লাইভ সিঙ্ক" : "Continuous Auto Sync"}
+              {isBengali ? "স্বয়ংক্রিয় লাইভ সিঙ্ক" : "Auto Live Sync"}
             </h4>
             <p className="leading-relaxed">
-              {isBengali 
-                ? "আমাদের সার্ভারে ৩ মিনিট পর পর abusaeeidx-এর আসল গিটহাব রিপোজিটরি থেকে প্লেলিস্ট রিলোড করা হয়। তাই কোন লিঙ্ক পরিবর্তন বা আপডেট হলে আপনার পেইজে সেটি স্বয়ংক্রিয়ভাবে কার্যকর হবে।" 
-                : "The website connects to our Express compiler which pulls and parses the GitHub IPTV playlist dynamically every 3 minutes. Auto updates are instant and completely secure."}
+              {isBengali ? "স্বয়ংক্রিয়ভাবে প্লেলিস্ট আপডেট হয়" : "Automatically updates playlist from source"}
             </p>
           </div>
           
           <div className="space-y-2">
             <h4 className="text-white font-bold flex items-center gap-2">
-              <Shield className="w-4 h-4 text-lime-400" />
+              <Wifi className="w-4 h-4 text-lime-400" />
               {isBengali ? "অ্যাডাপটিভ স্ট্রিমিং" : "Adaptive Streaming"}
             </h4>
             <p className="leading-relaxed">
-              {isBengali 
-                ? "ইন্টারনেট স্পিড অনুযায়ী স্বয়ংক্রিয়ভাবে ভিডিও কোয়ালিটি অ্যাডজাস্ট হয়। ম্যানুয়ালি কোয়ালিটি সেট করার সুযোগও রয়েছে।" 
-                : "Video quality automatically adjusts based on internet speed. Manual quality settings are also available for fine-tuning."}
+              {isBengali ? "ইন্টারনেট স্পিড অনুযায়ী কোয়ালিটি অ্যাডজাস্ট হয়" : "Quality adjusts based on internet speed"}
             </p>
           </div>
 
           <div className="space-y-2">
             <h4 className="text-white font-bold flex items-center gap-2">
               <HelpCircle className="w-4 h-4 text-lime-400" />
-              {isBengali ? "অটো-প্লে নেক্সট চ্যানেল" : "Auto-Play Next Channel"}
+              {isBengali ? "অটো-প্লে নেক্সট" : "Auto-Play Next"}
             </h4>
             <p className="leading-relaxed">
-              {isBengali 
-                ? "যদি কোনো চ্যানেলের লিংক কাজ না করে, তাহলে স্বয়ংক্রিয়ভাবে পরবর্তী চ্যানেলটি প্লে হবে।" 
-                : "If a channel link fails, the app will automatically play the next available channel."}
+              {isBengali ? "লিংক ফেইল হলে পরবর্তী চ্যানেল চলে" : "Next channel plays if current fails"}
             </p>
           </div>
         </div>
@@ -1200,14 +963,14 @@ export default function App() {
       <footer className="bg-zinc-950 border-t border-zinc-900 py-6 mt-12 text-center text-xs text-zinc-500 px-4">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="font-mono">
-            &copy; {new Date().getFullYear()} KhelaGhor Live TV. FIFA World Cup Edition.
+            &copy; {new Date().getFullYear()} KhelaGhor Live TV
           </p>
           <div className="flex gap-4">
             <a href="#" onClick={() => setIsBengali(!isBengali)} className="hover:text-lime-400 transition">
-              {isBengali ? "ভাষা বদলান (English)" : "Switch Language (বাংলা)"}
+              {isBengali ? "English" : "বাংলা"}
             </a>
             <span>|</span>
-            <span>FIFA World Cup Stream v2.0</span>
+            <span>FIFA World Cup v2.0</span>
           </div>
         </div>
       </footer>
