@@ -29,6 +29,7 @@ export default function App() {
   const [playlistLastUpdated, setPlaylistLastUpdated] = useState<string>('');
   const [playlistLastUpdatedBn, setPlaylistLastUpdatedBn] = useState<string>('');
   const [commitSha, setCommitSha] = useState<string>('');
+  const [initialAutoPlayDone, setInitialAutoPlayDone] = useState<boolean>(false);
 
   // Track dead links
   const [deadLinks, setDeadLinks] = useState<Set<string>>(new Set());
@@ -105,7 +106,7 @@ export default function App() {
     setError(null);
     try {
       // Concurrently parse the real fixtures!
-      fetchFifaMatches(forceRefresh);
+      await fetchFifaMatches(forceRefresh);
 
       // Direct call to our custom premium server endpoint
       const response = await fetch(`/api/channels${forceRefresh ? '?force=true' : ''}`);
@@ -122,13 +123,20 @@ export default function App() {
       // Reset dead links on fresh fetch
       setDeadLinks(new Set());
 
-      // Set default video if not set
-      if (data.channels && data.channels.length > 0 && !selectedChannel) {
-        // Try to find first live cricket/football or first live channel
+      // Auto-play: Try to find and play FIFA World Cup live channel
+      const fifaLiveChannel = findFIFALiveChannel(data.channels || []);
+      if (fifaLiveChannel) {
+        setSelectedChannel(fifaLiveChannel);
+        setInitialAutoPlayDone(true);
+      } else {
+        // Fallback: Try to find any live cricket/football or first live channel
         const defaultCh = data.channels.find((ch: Channel) => ch.isCricket && ch.isLive) ||
                           data.channels.find((ch: Channel) => ch.isLive) ||
                           data.channels[0];
-        setSelectedChannel(defaultCh);
+        if (defaultCh) {
+          setSelectedChannel(defaultCh);
+          setInitialAutoPlayDone(true);
+        }
       }
     } catch (err: any) {
       console.error("Fetch channels error:", err);
@@ -139,13 +147,54 @@ export default function App() {
     }
   };
 
+  // Helper function to find FIFA World Cup live channel
+  const findFIFALiveChannel = (channelList: Channel[]) => {
+    // First priority: FIFA channel that is live
+    const fifaLive = channelList.find((ch: Channel) => 
+      ch.isFifa && ch.isLive && ch.name.toLowerCase().includes('fifa')
+    );
+    if (fifaLive) return fifaLive;
+
+    // Second priority: Any FIFA related channel that is live
+    const fifaRelated = channelList.find((ch: Channel) => 
+      ch.isFifa && ch.isLive
+    );
+    if (fifaRelated) return fifaRelated;
+
+    // Third priority: FIFA channel (even if not marked live)
+    const fifaAny = channelList.find((ch: Channel) => 
+      ch.isFifa
+    );
+    if (fifaAny) return fifaAny;
+
+    return null;
+  };
+
+  // Auto-play effect when channels or FIFA matches update
+  useEffect(() => {
+    // If we already have a selected channel and it's playing, don't override
+    if (selectedChannel && selectedChannel.isLive && !deadLinks.has(selectedChannel.id)) {
+      return;
+    }
+
+    // Check if any FIFA channel is live and we should switch to it
+    const fifaLive = channels.find((ch: Channel) => 
+      ch.isFifa && ch.isLive && !deadLinks.has(ch.id)
+    );
+
+    // If there's a FIFA live channel and it's not currently selected, switch to it
+    if (fifaLive && selectedChannel?.id !== fifaLive.id) {
+      setSelectedChannel(fifaLive);
+    }
+  }, [channels, fifaMatches, deadLinks, selectedChannel]);
+
   useEffect(() => {
     fetchChannels();
 
-    // Auto update live scores every 60 seconds to provide top-notch real-time status
+    // Auto update live scores every 30 seconds for real-time FIFA updates
     const timer = setInterval(() => {
       fetchFifaMatches();
-    }, 60000);
+    }, 30000);
     return () => clearInterval(timer);
   }, []);
 
@@ -172,24 +221,33 @@ export default function App() {
 
   // Auto-switch to a live channel when current one dies
   const autoSwitchToLiveChannel = () => {
-    // Find the first live channel that's not dead
+    // First priority: FIFA live channels
+    const fifaLive = processedChannels.find(
+      ch => ch.isFifa && ch.isLive && !deadLinks.has(ch.id)
+    );
+    if (fifaLive) {
+      setSelectedChannel(fifaLive);
+      console.log(`Auto-switched to FIFA live: ${fifaLive.name}`);
+      return;
+    }
+
+    // Second priority: Any live channel
     const liveChannel = processedChannels.find(
       ch => ch.isLive && !deadLinks.has(ch.id) && ch.id !== selectedChannel?.id
     );
-    
     if (liveChannel) {
       setSelectedChannel(liveChannel);
-      // Show a notification or toast here if you want
-      console.log(`Auto-switched to ${liveChannel.name}`);
-    } else {
-      // If no live channel available, try to find any non-dead channel
-      const anyChannel = processedChannels.find(
-        ch => !deadLinks.has(ch.id) && ch.id !== selectedChannel?.id
-      );
-      if (anyChannel) {
-        setSelectedChannel(anyChannel);
-        console.log(`Auto-switched to ${anyChannel.name}`);
-      }
+      console.log(`Auto-switched to live: ${liveChannel.name}`);
+      return;
+    }
+
+    // Third priority: Any non-dead channel
+    const anyChannel = processedChannels.find(
+      ch => !deadLinks.has(ch.id) && ch.id !== selectedChannel?.id
+    );
+    if (anyChannel) {
+      setSelectedChannel(anyChannel);
+      console.log(`Auto-switched to: ${anyChannel.name}`);
     }
   };
 
@@ -222,6 +280,10 @@ export default function App() {
 
     // Auto-sort: Live channels on top, dead links at bottom
     return [...list].sort((a, b) => {
+      // FIFA World Cup channels get highest priority
+      if (a.isFifa && !b.isFifa) return -1;
+      if (!a.isFifa && b.isFifa) return 1;
+
       // Dead links always go to the bottom
       if (a.isDead && !b.isDead) return 1;
       if (!a.isDead && b.isDead) return -1;
@@ -443,6 +505,38 @@ export default function App() {
           </div>
         )}
 
+        {/* FIFA Live Status Banner - Shows current FIFA match status */}
+        {fifaChannels.length > 0 && (
+          <div className="bg-gradient-to-r from-amber-500/20 via-amber-600/10 to-zinc-950 border border-amber-500/30 p-4 rounded-2xl flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-3">
+              <Trophy className="w-6 h-6 text-amber-500 animate-pulse" />
+              <div>
+                <h4 className="text-sm font-bold text-white">
+                  {isBengali ? "🏆 ফিফা বিশ্বকাপ লাইভ" : "🏆 FIFA World Cup Live"}
+                </h4>
+                <p className="text-xs text-zinc-400">
+                  {fifaChannels.filter(ch => ch.isLive).length > 0 
+                    ? isBengali 
+                      ? `${fifaChannels.filter(ch => ch.isLive).length}টি চ্যানেল লাইভ সম্প্রচার করছে` 
+                      : `${fifaChannels.filter(ch => ch.isLive).length} channels live broadcasting`
+                    : isBengali 
+                      ? "শীঘ্রই লাইভ সম্প্রচার শুরু হবে" 
+                      : "Live broadcast starting soon"}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+              </span>
+              <span className="text-xs font-bold text-red-400 animate-pulse">
+                {isBengali ? "সরাসরি সম্প্রচার" : "LIVE"}
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Dynamic synchronization alert details */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs text-zinc-400 bg-zinc-900/35 px-4.5 py-3 rounded-2xl border border-zinc-900/80 shadow-inner">
           <div className="flex flex-col gap-1">
@@ -558,6 +652,7 @@ export default function App() {
                           <span className="text-xs uppercase font-extrabold tracking-wider text-lime-400 bg-lime-500/10 border border-lime-500/25 px-2 py-0.5 rounded-lg flex items-center gap-1">
                             {selectedChannel.isLive && !deadLinks.has(selectedChannel.id) && <span className="w-1.5 h-1.5 rounded-full bg-lime-400 animate-pulse inline-block" />}
                             {deadLinks.has(selectedChannel.id) && <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" />}
+                            {selectedChannel.isFifa && <Trophy className="w-3 h-3 text-amber-400 ml-1" />}
                             {isBengali ? "বর্তমানে খেলছেনঃ" : "Now Watching:"}
                           </span>
                           <span className="text-xs bg-zinc-800 px-2.5 py-1.5 text-zinc-300 rounded-lg flex items-center gap-1">
@@ -566,6 +661,12 @@ export default function App() {
                           {deadLinks.has(selectedChannel.id) && (
                             <span className="text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded-lg font-bold animate-pulse">
                               {isBengali ? "লিংক ডেড" : "DEAD LINK"}
+                            </span>
+                          )}
+                          {selectedChannel.isFifa && selectedChannel.isLive && !deadLinks.has(selectedChannel.id) && (
+                            <span className="text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-lg font-bold animate-pulse flex items-center gap-1">
+                              <Trophy className="w-3 h-3" />
+                              {isBengali ? "ফিফা বিশ্বকাপ" : "FIFA WORLD CUP"}
                             </span>
                           )}
                         </div>
@@ -632,37 +733,46 @@ export default function App() {
                     {fifaChannels.length > 0 ? (
                       fifaChannels.map((ch) => {
                         const isSelected = selectedChannel?.id === ch.id;
+                        const isDead = deadLinks.has(ch.id);
                         return (
                           <div
                             id={`fifa-hub-${ch.id}`}
                             key={ch.id}
                             onClick={() => {
-                              if (!deadLinks.has(ch.id)) {
+                              if (!isDead) {
                                 setSelectedChannel(ch);
                                 window.scrollTo({ top: 120, behavior: 'smooth' });
                               }
                             }}
                             className={`p-3 rounded-2xl border cursor-pointer transition flex items-center justify-between ${
-                              deadLinks.has(ch.id) ? 'opacity-50 cursor-not-allowed bg-red-950/10 border-red-500/20' :
+                              isDead ? 'opacity-50 cursor-not-allowed bg-red-950/10 border-red-500/20' :
                               isSelected
                                 ? 'bg-amber-500/10 border-amber-500/60 text-amber-300'
                                 : 'bg-zinc-900/40 hover:bg-zinc-900 border-zinc-900/60 hover:border-amber-500/20'
                             }`}
                           >
                             <div className="flex items-center gap-2.5">
-                              <span className="text-xl">{deadLinks.has(ch.id) ? '🚫' : '🏆'}</span>
+                              <span className="text-xl">{isDead ? '🚫' : ch.isLive ? '🏆' : '⚽'}</span>
                               <div>
-                                <h4 className="text-xs font-black line-clamp-1 text-zinc-200">{ch.name}</h4>
-                                <p className="text-[10px] text-zinc-500 mt-0.5">{getCountryEmoji(ch.countryCode)} {ch.country} • {deadLinks.has(ch.id) ? '🔴 Dead Link' : 'Live Stream'}</p>
+                                <h4 className="text-xs font-black line-clamp-1 text-zinc-200">
+                                  {ch.name}
+                                  {ch.isLive && !isDead && (
+                                    <span className="ml-1.5 text-[8px] bg-red-500 text-white px-1 py-0.5 rounded animate-pulse">LIVE</span>
+                                  )}
+                                </h4>
+                                <p className="text-[10px] text-zinc-500 mt-0.5">
+                                  {getCountryEmoji(ch.countryCode)} {ch.country} 
+                                  {isDead ? ' • 🔴 Dead Link' : ch.isLive ? ' • 🔴 Live Now' : ' • 📡 Ready'}
+                                </p>
                               </div>
                             </div>
-                            {!deadLinks.has(ch.id) && (
+                            {!isDead && ch.isLive && (
                               <span className="flex h-2 w-2 relative">
                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                                 <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
                               </span>
                             )}
-                            {deadLinks.has(ch.id) && (
+                            {isDead && (
                               <span className="text-red-500 text-[8px] font-bold uppercase">Dead</span>
                             )}
                           </div>
@@ -717,18 +827,19 @@ export default function App() {
                     <div className="flex gap-3 overflow-x-auto pb-3 custom-scrollbar snap-x scroll-smooth">
                       {hotLiveChannels.map((ch) => {
                         const isSelected = selectedChannel?.id === ch.id;
+                        const isDead = deadLinks.has(ch.id);
                         return (
                           <div
                             id={`hot-ch-${ch.id}`}
                             key={ch.id}
                             onClick={() => {
-                              if (!deadLinks.has(ch.id)) {
+                              if (!isDead) {
                                 setSelectedChannel(ch);
                                 window.scrollTo({ top: 120, behavior: 'smooth' });
                               }
                             }}
                             className={`flex-shrink-0 w-52 snap-start p-3 rounded-xl border cursor-pointer transition-all duration-200 flex flex-col justify-between ${
-                              deadLinks.has(ch.id) ? 'opacity-50 cursor-not-allowed border-red-500/20 bg-red-950/10' :
+                              isDead ? 'opacity-50 cursor-not-allowed border-red-500/20 bg-red-950/10' :
                               isSelected 
                                 ? 'bg-gradient-to-br from-zinc-900 to-lime-950/20 border-lime-500/70 shadow-lg shadow-lime-500/5' 
                                 : 'bg-zinc-900/40 hover:bg-zinc-900 border-zinc-900 hover:border-zinc-800'
@@ -742,13 +853,13 @@ export default function App() {
                               </span>
 
                               {/* Glowing live status */}
-                              {!deadLinks.has(ch.id) && (
+                              {!isDead && ch.isLive && (
                                 <span className="flex items-center gap-1.5 bg-red-600/10 border border-red-500/30 px-2 py-0.5 rounded text-[9px] text-red-400 font-bold uppercase animate-pulse">
                                   <span className="w-1 h-1 rounded-full bg-red-400 inline-block" />
                                   <span>LIVE</span>
                                 </span>
                               )}
-                              {deadLinks.has(ch.id) && (
+                              {isDead && (
                                 <span className="flex items-center gap-1.5 bg-red-600/10 border border-red-500/30 px-2 py-0.5 rounded text-[9px] text-red-400 font-bold uppercase">
                                   <span className="w-1 h-1 rounded-full bg-red-400 inline-block" />
                                   <span>DEAD</span>
@@ -758,10 +869,11 @@ export default function App() {
 
                             <p className="text-xs font-bold text-white line-clamp-2 min-h-8 mb-2 tracking-wide font-sans">
                               {ch.name}
+                              {ch.isFifa && <Trophy className="w-3 h-3 text-amber-400 inline-block ml-1" />}
                             </p>
 
                             <div className="flex items-center justify-between mt-1 text-[10px] text-zinc-500 font-mono">
-                              <span>{ch.isCricket ? "🏏 CRICKET" : "⚽ FOOTBALL"}</span>
+                              <span>{ch.isCricket ? "🏏 CRICKET" : ch.isFifa ? "🏆 FIFA" : "⚽ FOOTBALL"}</span>
                               <ChevronRight className={`w-3 h-3 ${isSelected ? 'text-lime-400 translate-x-0.5' : 'text-zinc-600'} transition-transform`} />
                             </div>
                           </div>
@@ -846,9 +958,9 @@ export default function App() {
                     >
                       <Trophy className="w-4 h-4 text-amber-500 fill-amber-500/25" />
                       <span>{isBengali ? "ফিফা বিশ্বকাপ" : "FIFA World Cup"}</span>
-                      {fifaChannels.filter(ch => !deadLinks.has(ch.id)).length > 0 && (
-                        <span className="ml-auto text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full font-bold">
-                          {fifaChannels.filter(ch => !deadLinks.has(ch.id)).length} Live
+                      {fifaChannels.filter(ch => !deadLinks.has(ch.id) && ch.isLive).length > 0 && (
+                        <span className="ml-auto text-[10px] bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full font-bold animate-pulse">
+                          {fifaChannels.filter(ch => !deadLinks.has(ch.id) && ch.isLive).length} LIVE
                         </span>
                       )}
                     </button>
@@ -956,12 +1068,18 @@ export default function App() {
                                     <span className="text-red-500 text-[8px] font-bold uppercase">Dead</span>
                                   </span>
                                 )}
+                                {ch.isFifa && !isDead && (
+                                  <span className="absolute top-0 left-0 w-2.5 h-2.5 bg-amber-500 rounded-full border border-zinc-950" />
+                                )}
                               </div>
                               
                               {/* Text info */}
                               <div>
                                 <h4 className={`text-xs font-bold leading-tight transition ${isPlayingNow ? 'text-lime-400' : 'text-zinc-200'}`}>
                                   {ch.name}
+                                  {ch.isFifa && !isDead && (
+                                    <span className="ml-1 text-[8px] bg-amber-500/20 text-amber-400 px-1 py-0.5 rounded">FIFA</span>
+                                  )}
                                 </h4>
                                 <div className="flex items-center gap-1.5 mt-1 font-sans text-[10px] text-zinc-500">
                                   <span>{getCountryEmoji(ch.countryCode)} {ch.country}</span>
@@ -987,7 +1105,7 @@ export default function App() {
                                 </span>
                               )}
                               <span className="text-[10px] text-zinc-600 font-bold uppercase tracking-wider font-mono">
-                                {ch.isCricket ? "🏏 Cricket" : ch.isFootball ? "⚽ Football" : "📺 General"}
+                                {ch.isFifa ? "🏆 FIFA" : ch.isCricket ? "🏏 Cricket" : ch.isFootball ? "⚽ Football" : "📺 General"}
                               </span>
                             </div>
                           </div>
@@ -1072,7 +1190,11 @@ export default function App() {
                     </div>
                   </div>
                   <span className="text-xs font-bold text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20">
-                    {fifaChannels.filter(ch => !deadLinks.has(ch.id)).length > 0 ? `${fifaChannels.filter(ch => !deadLinks.has(ch.id)).length} Feeds` : "Broadcast Tracker Live"}
+                    {fifaChannels.filter(ch => !deadLinks.has(ch.id) && ch.isLive).length > 0 
+                      ? `${fifaChannels.filter(ch => !deadLinks.has(ch.id) && ch.isLive).length} LIVE` 
+                      : fifaChannels.filter(ch => !deadLinks.has(ch.id)).length > 0 
+                        ? `${fifaChannels.filter(ch => !deadLinks.has(ch.id)).length} Ready` 
+                        : "Broadcast Tracker"}
                   </span>
                 </div>
 
@@ -1109,6 +1231,7 @@ export default function App() {
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     {fifaChannels.map(ch => {
                       const isDead = deadLinks.has(ch.id);
+                      const isLive = ch.isLive && !isDead;
                       return (
                         <div
                           id={`fifa-grid-ch-${ch.id}`}
@@ -1123,7 +1246,9 @@ export default function App() {
                             isDead ? 'opacity-50 cursor-not-allowed bg-red-950/5 border-red-500/20' :
                             selectedChannel?.id === ch.id 
                               ? 'bg-amber-500/10 border-amber-500 text-amber-400' 
-                              : 'bg-zinc-900/40 hover:bg-zinc-900 border-zinc-900 hover:border-amber-500/25'
+                              : isLive
+                                ? 'bg-amber-500/5 border-amber-500/30 hover:bg-amber-500/10'
+                                : 'bg-zinc-900/40 hover:bg-zinc-900 border-zinc-900 hover:border-amber-500/25'
                           }`}
                         >
                           <div className="flex items-center gap-3">
@@ -1131,12 +1256,16 @@ export default function App() {
                               {ch.logo ? <img src={ch.logo} className="w-full h-full object-contain" alt="" referrerPolicy="no-referrer" /> : <Trophy className="w-4 h-4 text-amber-500" />}
                             </div>
                             <div>
-                              <h4 className="text-xs font-black text-zinc-200 line-clamp-1">{ch.name}</h4>
+                              <h4 className="text-xs font-black text-zinc-200 line-clamp-1">
+                                {ch.name}
+                                {isLive && <span className="ml-1.5 text-[8px] bg-red-500 text-white px-1 py-0.5 rounded animate-pulse">LIVE</span>}
+                              </h4>
                               <p className="text-[10px] text-zinc-500 mt-0.5">{getCountryEmoji(ch.countryCode)} {ch.country}</p>
                             </div>
                           </div>
-                          {!isDead && <span className="animate-ping w-1.5 h-1.5 rounded-full bg-red-500" />}
+                          {isLive && <span className="animate-ping w-1.5 h-1.5 rounded-full bg-red-500" />}
                           {isDead && <span className="text-red-500 text-[8px] font-bold uppercase">Dead</span>}
+                          {!isLive && !isDead && <span className="text-amber-500/50 text-[8px] font-bold uppercase">Ready</span>}
                         </div>
                       );
                     })}
