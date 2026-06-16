@@ -30,6 +30,9 @@ export default function App() {
   const [playlistLastUpdatedBn, setPlaylistLastUpdatedBn] = useState<string>('');
   const [commitSha, setCommitSha] = useState<string>('');
 
+  // Track dead links
+  const [deadLinks, setDeadLinks] = useState<Set<string>>(new Set());
+
   // FIFA Match Interface definition and reactive lists
   const [fifaMatches, setFifaMatches] = useState<Array<{
     id: string;
@@ -116,6 +119,9 @@ export default function App() {
       setPlaylistLastUpdatedBn(data.playlistLastUpdatedBn || '');
       setCommitSha(data.commitSha || '');
 
+      // Reset dead links on fresh fetch
+      setDeadLinks(new Set());
+
       // Set default video if not set
       if (data.channels && data.channels.length > 0 && !selectedChannel) {
         // Try to find first live cricket/football or first live channel
@@ -154,6 +160,39 @@ export default function App() {
     });
   };
 
+  // Function to mark a channel as dead
+  const markChannelAsDead = (channelId: string) => {
+    setDeadLinks(prev => new Set(prev).add(channelId));
+    
+    // If the currently selected channel is dead, auto-switch to a live channel
+    if (selectedChannel?.id === channelId) {
+      autoSwitchToLiveChannel();
+    }
+  };
+
+  // Auto-switch to a live channel when current one dies
+  const autoSwitchToLiveChannel = () => {
+    // Find the first live channel that's not dead
+    const liveChannel = processedChannels.find(
+      ch => ch.isLive && !deadLinks.has(ch.id) && ch.id !== selectedChannel?.id
+    );
+    
+    if (liveChannel) {
+      setSelectedChannel(liveChannel);
+      // Show a notification or toast here if you want
+      console.log(`Auto-switched to ${liveChannel.name}`);
+    } else {
+      // If no live channel available, try to find any non-dead channel
+      const anyChannel = processedChannels.find(
+        ch => !deadLinks.has(ch.id) && ch.id !== selectedChannel?.id
+      );
+      if (anyChannel) {
+        setSelectedChannel(anyChannel);
+        console.log(`Auto-switched to ${anyChannel.name}`);
+      }
+    }
+  };
+
   // Switch to next/previous channel in current views
   const playNextChannel = () => {
     if (!selectedChannel || filteredChannels.length <= 1) return;
@@ -173,24 +212,34 @@ export default function App() {
     }
   };
 
-  // Helpers to structure channels based on user filters
+  // Helpers to structure channels based on user filters with dead link sorting
   const processedChannels = useMemo(() => {
     const list = channels.map(ch => ({
       ...ch,
-      isFav: favorites.includes(ch.id)
+      isFav: favorites.includes(ch.id),
+      isDead: deadLinks.has(ch.id)
     }));
 
-    // Auto-sort to guarantee LIVE / Sports games and premium television streams are ALWAYS at the top
+    // Auto-sort: Live channels on top, dead links at bottom
     return [...list].sort((a, b) => {
+      // Dead links always go to the bottom
+      if (a.isDead && !b.isDead) return 1;
+      if (!a.isDead && b.isDead) return -1;
+
+      // Among non-dead channels, prioritize live
+      if (a.isLive && !b.isLive) return -1;
+      if (!a.isLive && b.isLive) return 1;
+
+      // If both are live or both are dead, use existing priority scoring
       const getScore = (ch: typeof a) => {
         let score = 0;
 
-        // 0. FIFA World Cup channels get the absolute highest priority — always pinned to the top
+        // FIFA World Cup channels get the absolute highest priority
         if (ch.isFifa) {
           score += 50000;
         }
 
-        // 1. Live status gets highest sorting weight
+        // Live status adds priority
         if (ch.isLive) {
           score += 10000;
         }
@@ -198,17 +247,17 @@ export default function App() {
         const gLower = (ch.group || "").toLowerCase();
         const nLower = (ch.name || "").toLowerCase();
 
-        // 2. High priority match play and live event packages
+        // High priority match play and live event packages
         if (gLower.includes("live event") || gLower.includes("bdix") || gLower.includes("fifa")) {
           score += 5000;
         }
 
-        // 3. Premium targeted live sports channels (like BTV, T Sports, Sony, Star)
+        // Premium targeted live sports channels
         if (nLower.includes("[bd]") || nLower.includes("sports hd") || nLower.includes("t sports") || nLower.toLowerCase().includes("btv")) {
           score += 3000;
         }
 
-        // 4. Any general cricket or football tag
+        // Any general cricket or football tag
         if (ch.isCricket || ch.isFootball || ch.isFifa) {
           score += 1000;
         }
@@ -223,7 +272,7 @@ export default function App() {
       }
       return a.name.localeCompare(b.name); // Alphabetical fallback
     });
-  }, [channels, favorites]);
+  }, [channels, favorites, deadLinks]);
 
   // Filters by Category & Search query matching
   const filteredChannels = useMemo(() => {
@@ -237,39 +286,40 @@ export default function App() {
       if (!matchesSearch) return false;
 
       // 2. Category filters
-      if (activeCategory === 'running_live') return ch.isLive;
-      if (activeCategory === 'cricket') return ch.isCricket;
-      if (activeCategory === 'football') return ch.isFootball;
-      if (activeCategory === 'fifa') return ch.isFifa;
-      if (activeCategory === 'other') return !ch.isCricket && !ch.isFootball && !ch.isFifa;
+      if (activeCategory === 'running_live') return ch.isLive && !ch.isDead;
+      if (activeCategory === 'cricket') return ch.isCricket && !ch.isDead;
+      if (activeCategory === 'football') return ch.isFootball && !ch.isDead;
+      if (activeCategory === 'fifa') return ch.isFifa && !ch.isDead;
+      if (activeCategory === 'other') return !ch.isCricket && !ch.isFootball && !ch.isFifa && !ch.isDead;
       return true; // Represents 'all'
     });
-  }, [processedChannels, activeCategory, searchQuery]);
+  }, [processedChannels, activeCategory, searchQuery, deadLinks]);
 
-  // Split matches for layout sections
+  // Split matches for layout sections - excluding dead links
   const hotLiveChannels = useMemo(() => {
-    // Highly active channels that represent HOT sports matching user's specific guidelines
-    return processedChannels.filter(ch => ch.isLive && (ch.isCricket || ch.isFootball || ch.isFifa)).slice(0, 10);
+    return processedChannels
+      .filter(ch => ch.isLive && !ch.isDead && (ch.isCricket || ch.isFootball || ch.isFifa))
+      .slice(0, 10);
   }, [processedChannels]);
 
   const fifaChannels = useMemo(() => {
-    return processedChannels.filter(ch => ch.isFifa);
+    return processedChannels.filter(ch => ch.isFifa && !ch.isDead);
   }, [processedChannels]);
 
   const cricketChannels = useMemo(() => {
-    return processedChannels.filter(ch => ch.isCricket && !ch.isFifa);
+    return processedChannels.filter(ch => ch.isCricket && !ch.isFifa && !ch.isDead);
   }, [processedChannels]);
 
   const footballChannels = useMemo(() => {
-    return processedChannels.filter(ch => ch.isFootball && !ch.isFifa);
+    return processedChannels.filter(ch => ch.isFootball && !ch.isFifa && !ch.isDead);
   }, [processedChannels]);
 
   const otherChannels = useMemo(() => {
-    return processedChannels.filter(ch => !ch.isCricket && !ch.isFootball && !ch.isFifa);
+    return processedChannels.filter(ch => !ch.isCricket && !ch.isFootball && !ch.isFifa && !ch.isDead);
   }, [processedChannels]);
 
   const favoriteChannels = useMemo(() => {
-    return processedChannels.filter(ch => ch.isFav);
+    return processedChannels.filter(ch => ch.isFav && !ch.isDead);
   }, [processedChannels]);
 
   // Get flag/emoji of country code
@@ -498,6 +548,7 @@ export default function App() {
                       onToggleFavorite={() => handleToggleFavorite(selectedChannel.id)}
                       onNextChannel={playNextChannel}
                       onPrevChannel={playPrevChannel}
+                      onStreamError={(channelId) => markChannelAsDead(channelId)}
                     />
                     
                     {/* Running Live banner */}
@@ -505,12 +556,18 @@ export default function App() {
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="text-xs uppercase font-extrabold tracking-wider text-lime-400 bg-lime-500/10 border border-lime-500/25 px-2 py-0.5 rounded-lg flex items-center gap-1">
-                            {selectedChannel.isLive && <span className="w-1.5 h-1.5 rounded-full bg-lime-400 animate-pulse inline-block" />}
+                            {selectedChannel.isLive && !deadLinks.has(selectedChannel.id) && <span className="w-1.5 h-1.5 rounded-full bg-lime-400 animate-pulse inline-block" />}
+                            {deadLinks.has(selectedChannel.id) && <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" />}
                             {isBengali ? "বর্তমানে খেলছেনঃ" : "Now Watching:"}
                           </span>
                           <span className="text-xs bg-zinc-800 px-2.5 py-1.5 text-zinc-300 rounded-lg flex items-center gap-1">
                             {getCountryEmoji(selectedChannel.countryCode)} <span className="font-semibold">{selectedChannel.country}</span>
                           </span>
+                          {deadLinks.has(selectedChannel.id) && (
+                            <span className="text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded-lg font-bold animate-pulse">
+                              {isBengali ? "লিংক ডেড" : "DEAD LINK"}
+                            </span>
+                          )}
                         </div>
                         <h2 className="text-lg font-bold text-white mt-2 flex items-center gap-2">
                           {selectedChannel.name}
@@ -580,26 +637,34 @@ export default function App() {
                             id={`fifa-hub-${ch.id}`}
                             key={ch.id}
                             onClick={() => {
-                              setSelectedChannel(ch);
-                              window.scrollTo({ top: 120, behavior: 'smooth' });
+                              if (!deadLinks.has(ch.id)) {
+                                setSelectedChannel(ch);
+                                window.scrollTo({ top: 120, behavior: 'smooth' });
+                              }
                             }}
                             className={`p-3 rounded-2xl border cursor-pointer transition flex items-center justify-between ${
+                              deadLinks.has(ch.id) ? 'opacity-50 cursor-not-allowed bg-red-950/10 border-red-500/20' :
                               isSelected
                                 ? 'bg-amber-500/10 border-amber-500/60 text-amber-300'
                                 : 'bg-zinc-900/40 hover:bg-zinc-900 border-zinc-900/60 hover:border-amber-500/20'
                             }`}
                           >
                             <div className="flex items-center gap-2.5">
-                              <span className="text-xl">🏆</span>
+                              <span className="text-xl">{deadLinks.has(ch.id) ? '🚫' : '🏆'}</span>
                               <div>
                                 <h4 className="text-xs font-black line-clamp-1 text-zinc-200">{ch.name}</h4>
-                                <p className="text-[10px] text-zinc-500 mt-0.5">{getCountryEmoji(ch.countryCode)} {ch.country} • Live Stream</p>
+                                <p className="text-[10px] text-zinc-500 mt-0.5">{getCountryEmoji(ch.countryCode)} {ch.country} • {deadLinks.has(ch.id) ? '🔴 Dead Link' : 'Live Stream'}</p>
                               </div>
                             </div>
-                            <span className="flex h-2 w-2 relative">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                              <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
-                            </span>
+                            {!deadLinks.has(ch.id) && (
+                              <span className="flex h-2 w-2 relative">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                              </span>
+                            )}
+                            {deadLinks.has(ch.id) && (
+                              <span className="text-red-500 text-[8px] font-bold uppercase">Dead</span>
+                            )}
                           </div>
                         );
                       })
@@ -620,10 +685,13 @@ export default function App() {
                               id={`fifa-fallback-ch-${ch.id}`}
                               key={ch.id}
                               onClick={() => {
-                                setSelectedChannel(ch);
-                                window.scrollTo({ top: 120, behavior: 'smooth' });
+                                if (!deadLinks.has(ch.id)) {
+                                  setSelectedChannel(ch);
+                                  window.scrollTo({ top: 120, behavior: 'smooth' });
+                                }
                               }}
-                              className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-350 hover:text-white rounded-lg text-[10px] font-bold transition flex items-center gap-1.5 cursor-pointer"
+                              className={`px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-350 hover:text-white rounded-lg text-[10px] font-bold transition flex items-center gap-1.5 cursor-pointer ${deadLinks.has(ch.id) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              disabled={deadLinks.has(ch.id)}
                             >
                               <span>⚽ {ch.name}</span>
                             </button>
@@ -653,8 +721,14 @@ export default function App() {
                           <div
                             id={`hot-ch-${ch.id}`}
                             key={ch.id}
-                            onClick={() => setSelectedChannel(ch)}
+                            onClick={() => {
+                              if (!deadLinks.has(ch.id)) {
+                                setSelectedChannel(ch);
+                                window.scrollTo({ top: 120, behavior: 'smooth' });
+                              }
+                            }}
                             className={`flex-shrink-0 w-52 snap-start p-3 rounded-xl border cursor-pointer transition-all duration-200 flex flex-col justify-between ${
+                              deadLinks.has(ch.id) ? 'opacity-50 cursor-not-allowed border-red-500/20 bg-red-950/10' :
                               isSelected 
                                 ? 'bg-gradient-to-br from-zinc-900 to-lime-950/20 border-lime-500/70 shadow-lg shadow-lime-500/5' 
                                 : 'bg-zinc-900/40 hover:bg-zinc-900 border-zinc-900 hover:border-zinc-800'
@@ -668,10 +742,18 @@ export default function App() {
                               </span>
 
                               {/* Glowing live status */}
-                              <span className="flex items-center gap-1.5 bg-red-600/10 border border-red-500/30 px-2 py-0.5 rounded text-[9px] text-red-400 font-bold uppercase animate-pulse">
-                                <span className="w-1 h-1 rounded-full bg-red-400 inline-block" />
-                                <span>LIVE</span>
-                              </span>
+                              {!deadLinks.has(ch.id) && (
+                                <span className="flex items-center gap-1.5 bg-red-600/10 border border-red-500/30 px-2 py-0.5 rounded text-[9px] text-red-400 font-bold uppercase animate-pulse">
+                                  <span className="w-1 h-1 rounded-full bg-red-400 inline-block" />
+                                  <span>LIVE</span>
+                                </span>
+                              )}
+                              {deadLinks.has(ch.id) && (
+                                <span className="flex items-center gap-1.5 bg-red-600/10 border border-red-500/30 px-2 py-0.5 rounded text-[9px] text-red-400 font-bold uppercase">
+                                  <span className="w-1 h-1 rounded-full bg-red-400 inline-block" />
+                                  <span>DEAD</span>
+                                </span>
+                              )}
                             </div>
 
                             <p className="text-xs font-bold text-white line-clamp-2 min-h-8 mb-2 tracking-wide font-sans">
@@ -764,9 +846,9 @@ export default function App() {
                     >
                       <Trophy className="w-4 h-4 text-amber-500 fill-amber-500/25" />
                       <span>{isBengali ? "ফিফা বিশ্বকাপ" : "FIFA World Cup"}</span>
-                      {fifaChannels.length > 0 && (
+                      {fifaChannels.filter(ch => !deadLinks.has(ch.id)).length > 0 && (
                         <span className="ml-auto text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full font-bold">
-                          {fifaChannels.length} Live
+                          {fifaChannels.filter(ch => !deadLinks.has(ch.id)).length} Live
                         </span>
                       )}
                     </button>
@@ -817,7 +899,7 @@ export default function App() {
                       </span>
                     </div>
                     <span className="text-[10px] font-mono bg-zinc-800 px-2 py-0.5 rounded text-zinc-400">
-                      {filteredChannels.length} / {channels.length}
+                      {filteredChannels.filter(ch => !deadLinks.has(ch.id)).length} / {channels.length - deadLinks.size}
                     </span>
                   </div>
 
@@ -832,12 +914,19 @@ export default function App() {
                     ) : (
                       filteredChannels.map((ch) => {
                         const isPlayingNow = selectedChannel?.id === ch.id;
+                        const isDead = deadLinks.has(ch.id);
                         return (
                           <div
                             id={`dir-ch-${ch.id}`}
                             key={ch.id}
-                            onClick={() => setSelectedChannel(ch)}
-                            className={`p-3 transition-all duration-150 flex items-center justify-between cursor-pointer ${
+                            onClick={() => {
+                              if (!isDead) {
+                                setSelectedChannel(ch);
+                                window.scrollTo({ top: 120, behavior: 'smooth' });
+                              }
+                            }}
+                            className={`p-3 transition-all duration-150 flex items-center justify-between ${
+                              isDead ? 'opacity-50 cursor-not-allowed bg-red-950/5' :
                               isPlayingNow 
                                 ? 'bg-zinc-900 border-l-4 border-lime-500' 
                                 : 'hover:bg-zinc-900/40 bg-zinc-950/25'
@@ -862,6 +951,11 @@ export default function App() {
                                 {ch.isFav && (
                                   <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-rose-500 rounded-full border border-zinc-950" />
                                 )}
+                                {isDead && (
+                                  <span className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                    <span className="text-red-500 text-[8px] font-bold uppercase">Dead</span>
+                                  </span>
+                                )}
                               </div>
                               
                               {/* Text info */}
@@ -879,7 +973,11 @@ export default function App() {
 
                             {/* Indicators of Live & Country */}
                             <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                              {ch.isLive ? (
+                              {isDead ? (
+                                <span className="bg-red-900 border border-red-700 text-[8px] text-red-400 px-1.5 py-0.5 rounded uppercase font-bold">
+                                  DEAD
+                                </span>
+                              ) : ch.isLive ? (
                                 <span className="flex items-center gap-1 bg-red-600 px-1.5 py-0.5 rounded text-[8px] text-white font-extrabold tracking-wider animate-pulse uppercase">
                                   <span>LIVE</span>
                                 </span>
@@ -926,10 +1024,13 @@ export default function App() {
                         id={`fav-card-${ch.id}`}
                         key={ch.id}
                         onClick={() => {
-                          setSelectedChannel(ch);
-                          window.scrollTo({ top: 120, behavior: 'smooth' });
+                          if (!deadLinks.has(ch.id)) {
+                            setSelectedChannel(ch);
+                            window.scrollTo({ top: 120, behavior: 'smooth' });
+                          }
                         }}
                         className={`p-4 rounded-xl border cursor-pointer transition-all duration-200 flex items-center justify-between ${
+                          deadLinks.has(ch.id) ? 'opacity-50 cursor-not-allowed border-red-500/20 bg-red-950/5' :
                           selectedChannel?.id === ch.id 
                             ? 'bg-zinc-900 border-rose-500/60' 
                             : 'bg-zinc-900/40 hover:bg-zinc-900 border-zinc-900'
@@ -944,7 +1045,11 @@ export default function App() {
                             <p className="text-[10px] text-zinc-500 mt-0.5">{getCountryEmoji(ch.countryCode)} {ch.country}</p>
                           </div>
                         </div>
-                        <CheckCircle2 className="w-4 h-4 text-rose-500 flex-shrink-0" />
+                        {deadLinks.has(ch.id) ? (
+                          <span className="text-red-500 text-[8px] font-bold uppercase">Dead</span>
+                        ) : (
+                          <CheckCircle2 className="w-4 h-4 text-rose-500 flex-shrink-0" />
+                        )}
                       </div>
                     ))}
                   </div>
@@ -967,7 +1072,7 @@ export default function App() {
                     </div>
                   </div>
                   <span className="text-xs font-bold text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20">
-                    {fifaChannels.length > 0 ? `${fifaChannels.length} Feeds Match` : "Broadcast Tracker Live"}
+                    {fifaChannels.filter(ch => !deadLinks.has(ch.id)).length > 0 ? `${fifaChannels.filter(ch => !deadLinks.has(ch.id)).length} Feeds` : "Broadcast Tracker Live"}
                   </span>
                 </div>
 
@@ -983,15 +1088,17 @@ export default function App() {
                     
                     {/* Fallback Live Football streams inside FIFA bento box for quick exploration */}
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-4 w-full">
-                      {processedChannels.filter(ch => ch.isFootball).slice(0, 4).map(ch => (
+                      {processedChannels.filter(ch => ch.isFootball && !deadLinks.has(ch.id)).slice(0, 4).map(ch => (
                         <div
                           id={`fifa-bento-fb-${ch.id}`}
                           key={ch.id}
                           onClick={() => {
-                            setSelectedChannel(ch);
-                            window.scrollTo({ top: 120, behavior: 'smooth' });
+                            if (!deadLinks.has(ch.id)) {
+                              setSelectedChannel(ch);
+                              window.scrollTo({ top: 120, behavior: 'smooth' });
+                            }
                           }}
-                          className="p-2.5 bg-zinc-900 hover:bg-zinc-850 rounded-xl text-center border border-zinc-800/60 cursor-pointer transition text-[11px] font-bold text-zinc-300 hover:text-white truncate"
+                          className={`p-2.5 bg-zinc-900 hover:bg-zinc-850 rounded-xl text-center border border-zinc-800/60 cursor-pointer transition text-[11px] font-bold text-zinc-300 hover:text-white truncate ${deadLinks.has(ch.id) ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
                           <span className="mr-1">⚽</span> {ch.name}
                         </div>
@@ -1000,32 +1107,39 @@ export default function App() {
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    {fifaChannels.map(ch => (
-                      <div
-                        id={`fifa-grid-ch-${ch.id}`}
-                        key={ch.id}
-                        onClick={() => {
-                          setSelectedChannel(ch);
-                          window.scrollTo({ top: 120, behavior: 'smooth' });
-                        }}
-                        className={`p-3.5 rounded-2xl border text-left cursor-pointer transition flex items-center justify-between ${
-                          selectedChannel?.id === ch.id 
-                            ? 'bg-amber-500/10 border-amber-500 text-amber-400' 
-                            : 'bg-zinc-900/40 hover:bg-zinc-900 border-zinc-900 hover:border-amber-500/25'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 items-center justify-center bg-zinc-950 p-1 rounded-xl flex border border-zinc-800 flex-shrink-0">
-                            {ch.logo ? <img src={ch.logo} className="w-full h-full object-contain" alt="" referrerPolicy="no-referrer" /> : <Trophy className="w-4 h-4 text-amber-500" />}
+                    {fifaChannels.map(ch => {
+                      const isDead = deadLinks.has(ch.id);
+                      return (
+                        <div
+                          id={`fifa-grid-ch-${ch.id}`}
+                          key={ch.id}
+                          onClick={() => {
+                            if (!isDead) {
+                              setSelectedChannel(ch);
+                              window.scrollTo({ top: 120, behavior: 'smooth' });
+                            }
+                          }}
+                          className={`p-3.5 rounded-2xl border text-left cursor-pointer transition flex items-center justify-between ${
+                            isDead ? 'opacity-50 cursor-not-allowed bg-red-950/5 border-red-500/20' :
+                            selectedChannel?.id === ch.id 
+                              ? 'bg-amber-500/10 border-amber-500 text-amber-400' 
+                              : 'bg-zinc-900/40 hover:bg-zinc-900 border-zinc-900 hover:border-amber-500/25'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 items-center justify-center bg-zinc-950 p-1 rounded-xl flex border border-zinc-800 flex-shrink-0">
+                              {ch.logo ? <img src={ch.logo} className="w-full h-full object-contain" alt="" referrerPolicy="no-referrer" /> : <Trophy className="w-4 h-4 text-amber-500" />}
+                            </div>
+                            <div>
+                              <h4 className="text-xs font-black text-zinc-200 line-clamp-1">{ch.name}</h4>
+                              <p className="text-[10px] text-zinc-500 mt-0.5">{getCountryEmoji(ch.countryCode)} {ch.country}</p>
+                            </div>
                           </div>
-                          <div>
-                            <h4 className="text-xs font-black text-zinc-200 line-clamp-1">{ch.name}</h4>
-                            <p className="text-[10px] text-zinc-500 mt-0.5">{getCountryEmoji(ch.countryCode)} {ch.country}</p>
-                          </div>
+                          {!isDead && <span className="animate-ping w-1.5 h-1.5 rounded-full bg-red-500" />}
+                          {isDead && <span className="text-red-500 text-[8px] font-bold uppercase">Dead</span>}
                         </div>
-                        <span className="animate-ping w-1.5 h-1.5 rounded-full bg-red-500" />
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -1058,30 +1172,40 @@ export default function App() {
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[300px] overflow-y-auto pr-1.5 custom-scrollbar">
-                      {cricketChannels.map(ch => (
-                        <div
-                          id={`cricket-grid-ch-${ch.id}`}
-                          key={ch.id}
-                          onClick={() => {
-                            setSelectedChannel(ch);
-                            window.scrollTo({ top: 120, behavior: 'smooth' });
-                          }}
-                          className={`p-2.5 rounded-xl border text-left cursor-pointer transition ${
-                            selectedChannel?.id === ch.id 
-                              ? 'bg-lime-500/10 border-lime-500/50 text-lime-400' 
-                              : 'bg-zinc-950/60 hover:bg-zinc-900 border-zinc-900 hover:border-zinc-800'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between gap-1">
-                            <h4 className="text-[11px] font-bold text-zinc-200 line-clamp-1">{ch.name}</h4>
-                            <span className="text-[11px] flex-shrink-0" title={ch.country}>{getCountryEmoji(ch.countryCode)}</span>
+                      {cricketChannels.map(ch => {
+                        const isDead = deadLinks.has(ch.id);
+                        return (
+                          <div
+                            id={`cricket-grid-ch-${ch.id}`}
+                            key={ch.id}
+                            onClick={() => {
+                              if (!isDead) {
+                                setSelectedChannel(ch);
+                                window.scrollTo({ top: 120, behavior: 'smooth' });
+                              }
+                            }}
+                            className={`p-2.5 rounded-xl border text-left cursor-pointer transition ${
+                              isDead ? 'opacity-50 cursor-not-allowed bg-red-950/5 border-red-500/20' :
+                              selectedChannel?.id === ch.id 
+                                ? 'bg-lime-500/10 border-lime-500/50 text-lime-400' 
+                                : 'bg-zinc-950/60 hover:bg-zinc-900 border-zinc-900 hover:border-zinc-800'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-1">
+                              <h4 className="text-[11px] font-bold text-zinc-200 line-clamp-1">{ch.name}</h4>
+                              <span className="text-[11px] flex-shrink-0" title={ch.country}>{getCountryEmoji(ch.countryCode)}</span>
+                            </div>
+                            <div className="flex items-center justify-between mt-1 text-[9px] text-zinc-500">
+                              <span>{ch.country}</span>
+                              {isDead ? (
+                                <span className="text-red-500 font-bold tracking-wider uppercase">🔴 DEAD</span>
+                              ) : ch.isLive && (
+                                <span className="text-red-400 font-bold tracking-wider uppercase">🔴 LIVE</span>
+                              )}
+                            </div>
                           </div>
-                          <div className="flex items-center justify-between mt-1 text-[9px] text-zinc-500">
-                            <span>{ch.country}</span>
-                            {ch.isLive && <span className="text-red-400 font-bold tracking-wider uppercase">🔴 LIVE</span>}
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -1111,30 +1235,40 @@ export default function App() {
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[300px] overflow-y-auto pr-1.5 custom-scrollbar">
-                      {footballChannels.map(ch => (
-                        <div
-                          id={`foot-grid-ch-${ch.id}`}
-                          key={ch.id}
-                          onClick={() => {
-                            setSelectedChannel(ch);
-                            window.scrollTo({ top: 120, behavior: 'smooth' });
-                          }}
-                          className={`p-2.5 rounded-xl border text-left cursor-pointer transition ${
-                            selectedChannel?.id === ch.id 
-                              ? 'bg-lime-500/10 border-lime-500/50 text-lime-400' 
-                              : 'bg-zinc-950/60 hover:bg-zinc-900 border-zinc-900 hover:border-zinc-800'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between gap-1">
-                            <h4 className="text-[11px] font-bold text-zinc-200 line-clamp-1">{ch.name}</h4>
-                            <span className="text-[11px] flex-shrink-0" title={ch.country}>{getCountryEmoji(ch.countryCode)}</span>
+                      {footballChannels.map(ch => {
+                        const isDead = deadLinks.has(ch.id);
+                        return (
+                          <div
+                            id={`foot-grid-ch-${ch.id}`}
+                            key={ch.id}
+                            onClick={() => {
+                              if (!isDead) {
+                                setSelectedChannel(ch);
+                                window.scrollTo({ top: 120, behavior: 'smooth' });
+                              }
+                            }}
+                            className={`p-2.5 rounded-xl border text-left cursor-pointer transition ${
+                              isDead ? 'opacity-50 cursor-not-allowed bg-red-950/5 border-red-500/20' :
+                              selectedChannel?.id === ch.id 
+                                ? 'bg-lime-500/10 border-lime-500/50 text-lime-400' 
+                                : 'bg-zinc-950/60 hover:bg-zinc-900 border-zinc-900 hover:border-zinc-800'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-1">
+                              <h4 className="text-[11px] font-bold text-zinc-200 line-clamp-1">{ch.name}</h4>
+                              <span className="text-[11px] flex-shrink-0" title={ch.country}>{getCountryEmoji(ch.countryCode)}</span>
+                            </div>
+                            <div className="flex items-center justify-between mt-1 text-[9px] text-zinc-500">
+                              <span>{ch.country}</span>
+                              {isDead ? (
+                                <span className="text-red-500 font-bold tracking-wider uppercase">🔴 DEAD</span>
+                              ) : ch.isLive && (
+                                <span className="text-red-400 font-bold tracking-wider uppercase">🔴 LIVE</span>
+                              )}
+                            </div>
                           </div>
-                          <div className="flex items-center justify-between mt-1 text-[9px] text-zinc-500">
-                            <span>{ch.country}</span>
-                            {ch.isLive && <span className="text-red-400 font-bold tracking-wider uppercase">🔴 LIVE</span>}
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -1152,24 +1286,30 @@ export default function App() {
                   </div>
                   
                   <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2">
-                    {otherChannels.slice(0, 24).map(ch => (
-                      <div
-                        id={`other-grid-ch-${ch.id}`}
-                        key={ch.id}
-                        onClick={() => {
-                          setSelectedChannel(ch);
-                          window.scrollTo({ top: 120, behavior: 'smooth' });
-                        }}
-                        className={`p-2 rounded-xl text-center cursor-pointer border text-xs truncate ${
-                          selectedChannel?.id === ch.id
-                            ? 'bg-lime-500 text-zinc-950 font-bold border-lime-500'
-                            : 'bg-zinc-900/40 hover:bg-zinc-900 border-zinc-900 hover:-translate-y-0.5 transition duration-150'
-                        }`}
-                        title={ch.name}
-                      >
-                        <span className="mr-1">{getCountryEmoji(ch.countryCode)}</span> {ch.name}
-                      </div>
-                    ))}
+                    {otherChannels.slice(0, 24).map(ch => {
+                      const isDead = deadLinks.has(ch.id);
+                      return (
+                        <div
+                          id={`other-grid-ch-${ch.id}`}
+                          key={ch.id}
+                          onClick={() => {
+                            if (!isDead) {
+                              setSelectedChannel(ch);
+                              window.scrollTo({ top: 120, behavior: 'smooth' });
+                            }
+                          }}
+                          className={`p-2 rounded-xl text-center cursor-pointer border text-xs truncate ${
+                            isDead ? 'opacity-40 cursor-not-allowed bg-red-950/5 border-red-500/20' :
+                            selectedChannel?.id === ch.id
+                              ? 'bg-lime-500 text-zinc-950 font-bold border-lime-500'
+                              : 'bg-zinc-900/40 hover:bg-zinc-900 border-zinc-900 hover:-translate-y-0.5 transition duration-150'
+                          }`}
+                          title={ch.name}
+                        >
+                          <span className="mr-1">{getCountryEmoji(ch.countryCode)}</span> {ch.name}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
