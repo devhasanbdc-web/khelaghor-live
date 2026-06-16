@@ -1,0 +1,6 @@
+{
+  "name": "KhelaGhor LIVE - Sports Streaming",
+  "description": "Premium Sports TV streaming platform with live M3U playlist integration, auto-refresh channels, and interactive controls for Cricket, Football, and hot matches.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
