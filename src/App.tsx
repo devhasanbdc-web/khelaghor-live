@@ -404,8 +404,8 @@ export default function App() {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans selection:bg-lime-500 selection:text-zinc-950">
       
-      {/* GLOW BAR EFFECT & HEADER */}
-      <div className="w-full bg-gradient-to-r from-lime-500 via-emerald-500 to-indigo-500 h-1.5 shadow-md shadow-lime-500/10" />
+      {/* GLOW BAR EFFECT & HEADER - Removed all animations */}
+      <div className="w-full bg-gradient-to-r from-lime-500 via-emerald-500 to-indigo-500 h-1" />
 
       {/* Hero Header bar */}
       <header className="sticky top-0 z-40 bg-zinc-950/80 backdrop-blur-xl border-b border-zinc-900 px-4 py-3.5 lg:px-8 shadow-sm">
@@ -413,9 +413,8 @@ export default function App() {
           
           {/* Logo & Product Name */}
           <div className="flex items-center gap-3">
-            <div className="relative flex items-center justify-center bg-gradient-to-br from-lime-400 to-emerald-500 p-2.5 rounded-2xl shadow-lg shadow-lime-500/10 active:scale-95 transition-all">
+            <div className="relative flex items-center justify-center bg-gradient-to-br from-lime-400 to-emerald-500 p-2.5 rounded-2xl shadow-sm">
               <Tv className="w-6 h-6 text-zinc-950" />
-              {/* Removed red animation dot from top-right */}
             </div>
             <div>
               <div className="flex items-center gap-1.5">
@@ -478,7 +477,7 @@ export default function App() {
         
         {/* Loading error notification */}
         {error && (
-          <div className="w-full bg-red-950/20 border border-red-500/30 text-red-400 p-4 rounded-2xl flex items-center gap-3 animate-fade-in shadow-lg">
+          <div className="w-full bg-red-950/20 border border-red-500/30 text-red-400 p-4 rounded-2xl flex items-center gap-3 shadow-lg">
             <AlertTriangle className="w-5 h-5 flex-shrink-0" />
             <div className="flex-grow text-xs font-medium">
               {error}
@@ -492,11 +491,11 @@ export default function App() {
           </div>
         )}
 
-        {/* FIFA Live Status Banner - Shows current FIFA match status */}
+        {/* FIFA Live Status Banner */}
         {fifaChannels.length > 0 && (
           <div className="bg-gradient-to-r from-amber-500/20 via-amber-600/10 to-zinc-950 border border-amber-500/30 p-4 rounded-2xl flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-center gap-3">
-              <Trophy className="w-6 h-6 text-amber-500 animate-pulse" />
+              <Trophy className="w-6 h-6 text-amber-500" />
               <div>
                 <h4 className="text-sm font-bold text-white">
                   {isBengali ? "🏆 ফিফা বিশ্বকাপ লাইভ" : "🏆 FIFA World Cup Live"}
@@ -513,11 +512,8 @@ export default function App() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <span className="flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
-              </span>
-              <span className="text-xs font-bold text-red-400 animate-pulse">
+              <span className="w-2 h-2 rounded-full bg-red-500 inline-block"></span>
+              <span className="text-xs font-bold text-red-400">
                 {isBengali ? "সরাসরি সম্প্রচার" : "LIVE"}
               </span>
             </div>
@@ -528,10 +524,7 @@ export default function App() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs text-zinc-400 bg-zinc-900/35 px-4.5 py-3 rounded-2xl border border-zinc-900/80 shadow-inner">
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-2">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-lime-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-lime-500"></span>
-              </span>
+              <span className="w-2 h-2 rounded-full bg-lime-500 inline-block"></span>
               <span className="font-bold text-zinc-300">
                 {isBengali 
                   ? `প্লেলিস্ট উৎস: abusaeeidx IPTV (অটো-সিঙ্ক)` 
@@ -573,15 +566,12 @@ export default function App() {
         {/* LOADING BOX */}
         {loading ? (
           <div className="w-full flex flex-col items-center justify-center p-16 md:p-32 bg-zinc-950/20 border border-zinc-900/80 rounded-3xl backdrop-blur relative overflow-hidden">
-            {/* Ambient Background Glow */}
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-lime-500/5 rounded-full blur-3xl pointer-events-none" />
-            
             <div className="relative flex items-center justify-center mb-6">
               <div className="w-20 h-20 rounded-full border-t-2 border-lime-500 border-r-2 animate-spin"></div>
-              <Tv className="absolute w-8 h-8 text-lime-400 animate-pulse" />
+              <Tv className="absolute w-8 h-8 text-lime-400" />
             </div>
             
-            <h3 className="text-xl font-black text-white mb-2 font-sans select-none animate-pulse text-center tracking-tight">
+            <h3 className="text-xl font-black text-white mb-2 font-sans select-none text-center tracking-tight">
               {isBengali ? "খেলাঘর প্রস্তুত করা হচ্ছে..." : "Preparing Khelaghor..."}
             </h3>
             
@@ -591,12 +581,8 @@ export default function App() {
                 : "Automatically reading premium live sports streams from the M3U playlist..."}
             </p>
 
-            {/* BTV Loading Indicator & Badge */}
             <div className="bg-zinc-900/40 border border-zinc-850 px-5 py-3.5 rounded-2xl flex flex-col sm:flex-row items-center gap-3.5 max-w-sm w-full shadow-lg">
-              <span className="flex h-3 w-3 relative shrink-0">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
-              </span>
+              <span className="w-3 h-3 rounded-full bg-red-500 inline-block shrink-0"></span>
               <div className="text-center sm:text-left">
                 <div className="flex items-center justify-center sm:justify-start gap-1.5 flex-wrap">
                   <span className="text-[10px] font-extrabold uppercase bg-red-500/10 text-red-500 border border-red-500/20 px-2 py-0.5 rounded">BTV / বিটিভি</span>
@@ -632,12 +618,12 @@ export default function App() {
                       onStreamError={(channelId) => markChannelAsDead(channelId)}
                     />
                     
-                    {/* Running Live banner */}
+                    {/* Running Live banner - Removed all animations */}
                     <div className="p-4 bg-zinc-900/65 rounded-2xl border border-zinc-900 flex justify-between items-center flex-wrap gap-3">
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="text-xs uppercase font-extrabold tracking-wider text-lime-400 bg-lime-500/10 border border-lime-500/25 px-2 py-0.5 rounded-lg flex items-center gap-1">
-                            {selectedChannel.isLive && !deadLinks.has(selectedChannel.id) && <span className="w-1.5 h-1.5 rounded-full bg-lime-400 animate-pulse inline-block" />}
+                            {selectedChannel.isLive && !deadLinks.has(selectedChannel.id) && <span className="w-1.5 h-1.5 rounded-full bg-lime-400 inline-block" />}
                             {deadLinks.has(selectedChannel.id) && <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" />}
                             {selectedChannel.isFifa && <Trophy className="w-3 h-3 text-amber-400 ml-1" />}
                             {isBengali ? "বর্তমানে খেলছেনঃ" : "Now Watching:"}
@@ -646,12 +632,12 @@ export default function App() {
                             {getCountryEmoji(selectedChannel.countryCode)} <span className="font-semibold">{selectedChannel.country}</span>
                           </span>
                           {deadLinks.has(selectedChannel.id) && (
-                            <span className="text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded-lg font-bold animate-pulse">
+                            <span className="text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded-lg font-bold">
                               {isBengali ? "লিংক ডেড" : "DEAD LINK"}
                             </span>
                           )}
                           {selectedChannel.isFifa && selectedChannel.isLive && !deadLinks.has(selectedChannel.id) && (
-                            <span className="text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-lg font-bold animate-pulse flex items-center gap-1">
+                            <span className="text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-lg font-bold flex items-center gap-1">
                               <Trophy className="w-3 h-3" />
                               {isBengali ? "ফিফা বিশ্বকাপ" : "FIFA WORLD CUP"}
                             </span>
@@ -678,9 +664,8 @@ export default function App() {
                   </div>
                 )}
 
-                {/* FIFA World Cup Live Match Hub Banner */}
+                {/* FIFA World Cup Live Match Hub Banner - Removed animations */}
                 <div className="p-5 rounded-3xl bg-gradient-to-br from-amber-500/10 via-amber-600/5 to-zinc-950 border border-amber-500/20 shadow-xl relative overflow-hidden">
-                  {/* Decorative background trophy glowing */}
                   <div className="absolute top-2 right-2 opacity-5 pointer-events-none transform translate-x-4 -translate-y-4 scale-150">
                     <Trophy className="w-48 h-48 text-amber-500" />
                   </div>
@@ -688,10 +673,7 @@ export default function App() {
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
-                        <span className="flex h-2.5 w-2.5 relative">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
-                        </span>
+                        <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span>
                         <span className="text-[10px] font-mono font-extrabold uppercase text-amber-400 tracking-widest bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20">
                           FIFA World Cup Match Focus • ফিফা বিশ্বকাপ
                         </span>
@@ -744,20 +726,17 @@ export default function App() {
                                 <h4 className="text-xs font-black line-clamp-1 text-zinc-200">
                                   {ch.name}
                                   {ch.isLive && !isDead && (
-                                    <span className="ml-1.5 text-[8px] bg-red-500 text-white px-1 py-0.5 rounded animate-pulse">LIVE</span>
+                                    <span className="ml-1.5 text-[8px] bg-red-500 text-white px-1 py-0.5 rounded">LIVE</span>
                                   )}
                                 </h4>
                                 <p className="text-[10px] text-zinc-500 mt-0.5">
                                   {getCountryEmoji(ch.countryCode)} {ch.country} 
-                                  {isDead ? ' • 🔴 Dead Link' : ch.isLive ? ' • 🔴 Live Now' : ' • 📡 Ready'}
+                                  {isDead ? ' • Dead Link' : ch.isLive ? ' • Live Now' : ' • Ready'}
                                 </p>
                               </div>
                             </div>
                             {!isDead && ch.isLive && (
-                              <span className="flex h-2 w-2 relative">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
-                              </span>
+                              <span className="w-2 h-2 rounded-full bg-red-500 inline-block"></span>
                             )}
                             {isDead && (
                               <span className="text-red-500 text-[8px] font-bold uppercase">Dead</span>
@@ -768,7 +747,7 @@ export default function App() {
                     ) : (
                       <div className="sm:col-span-2 p-4 bg-zinc-900/20 border border-zinc-900/65 rounded-2xl text-center flex flex-col items-center justify-center">
                         <div className="flex items-center gap-2 text-amber-500 font-bold text-xs mb-1.5">
-                          <AlertTriangle className="w-4 h-4 text-amber-500 animate-bounce" />
+                          <AlertTriangle className="w-4 h-4 text-amber-500" />
                           <span>{isBengali ? "লাইভ বিশ্বকাপ ম্যাচ শুরু হওয়ার অপেক্ষা" : "Awaiting Kickoff of Live Match"}</span>
                         </div>
                         <p className="text-[10px] text-zinc-500 leading-relaxed max-w-lg">
@@ -799,18 +778,17 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* HORIZONTAL CAROUSEL - "HOT 🔴" LIVE MATCHES */}
+                {/* HORIZONTAL CAROUSEL - "HOT" LIVE MATCHES - Removed animations */}
                 {hotLiveChannels.length > 0 && (
                   <div className="mt-2 text-zinc-100">
                     <div className="flex items-center gap-2 mb-3.5 px-1">
-                      <Flame className="w-5 h-5 text-red-500 fill-current animate-pulse" />
+                      <Flame className="w-5 h-5 text-red-500 fill-current" />
                       <h3 className="text-md font-black tracking-wide uppercase flex items-center gap-1.5">
                         <span>{isBengali ? "চলতি হট খেলা" : "Hot Live Actions"}</span>
-                        <span className="bg-red-500 text-white font-mono font-black text-[9px] px-1.5 py-0.5 rounded tracking-widest animate-pulse">HOT</span>
+                        <span className="bg-red-500 text-white font-mono font-black text-[9px] px-1.5 py-0.5 rounded tracking-widest">HOT</span>
                       </h3>
                     </div>
                     
-                    {/* Horizontal scroll grid */}
                     <div className="flex gap-3 overflow-x-auto pb-3 custom-scrollbar snap-x scroll-smooth">
                       {hotLiveChannels.map((ch) => {
                         const isSelected = selectedChannel?.id === ch.id;
@@ -833,15 +811,13 @@ export default function App() {
                             }`}
                           >
                             <div className="flex items-start justify-between gap-1 mb-2">
-                              {/* Country indicator */}
                               <span className="text-xs bg-zinc-850/90 px-2 py-1 rounded-md text-zinc-300 border border-zinc-800 flex items-center gap-1" title={ch.country}>
                                 <span>{getCountryEmoji(ch.countryCode)}</span>
                                 <span className="font-sans text-[10px] text-zinc-400 font-semibold uppercase">{ch.countryCode}</span>
                               </span>
 
-                              {/* Glowing live status */}
                               {!isDead && ch.isLive && (
-                                <span className="flex items-center gap-1.5 bg-red-600/10 border border-red-500/30 px-2 py-0.5 rounded text-[9px] text-red-400 font-bold uppercase animate-pulse">
+                                <span className="flex items-center gap-1.5 bg-red-600/10 border border-red-500/30 px-2 py-0.5 rounded text-[9px] text-red-400 font-bold uppercase">
                                   <span className="w-1 h-1 rounded-full bg-red-400 inline-block" />
                                   <span>LIVE</span>
                                 </span>
@@ -900,11 +876,11 @@ export default function App() {
                       onClick={() => setActiveCategory('running_live')}
                       className={`px-3 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition duration-150 ${
                         activeCategory === 'running_live'
-                          ? 'bg-red-600 text-white font-black shadow-lg shadow-red-500/10 animate-pulse'
+                          ? 'bg-red-600 text-white font-black shadow-lg shadow-red-500/10'
                           : 'bg-zinc-900 text-zinc-300 hover:bg-zinc-850'
                       }`}
                     >
-                      <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-white inline-block" />
                       <span>{isBengali ? "হট লাইভ" : "Running Live"}</span>
                     </button>
 
@@ -946,7 +922,7 @@ export default function App() {
                       <Trophy className="w-4 h-4 text-amber-500 fill-amber-500/25" />
                       <span>{isBengali ? "ফিফা বিশ্বকাপ" : "FIFA World Cup"}</span>
                       {fifaChannels.filter(ch => !deadLinks.has(ch.id) && ch.isLive).length > 0 && (
-                        <span className="ml-auto text-[10px] bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full font-bold animate-pulse">
+                        <span className="ml-auto text-[10px] bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full font-bold">
                           {fifaChannels.filter(ch => !deadLinks.has(ch.id) && ch.isLive).length} LIVE
                         </span>
                       )}
@@ -974,7 +950,6 @@ export default function App() {
                       onClick={() => {
                         setActiveCategory('all');
                         setSearchQuery('');
-                        // Scroll to favorites block visually
                         const el = document.getElementById('favs-section');
                         if (el) el.scrollIntoView({ behavior: 'smooth' });
                       }}
@@ -1032,7 +1007,6 @@ export default function App() {
                             }`}
                           >
                             <div className="flex items-center gap-3">
-                              {/* Logo representation */}
                               <div className="w-10 h-10 rounded-xl bg-zinc-900/90 border border-zinc-800 p-1 flex items-center justify-center overflow-hidden flex-shrink-0 relative">
                                 {ch.logo ? (
                                   <img 
@@ -1060,7 +1034,6 @@ export default function App() {
                                 )}
                               </div>
                               
-                              {/* Text info */}
                               <div>
                                 <h4 className={`text-xs font-bold leading-tight transition ${isPlayingNow ? 'text-lime-400' : 'text-zinc-200'}`}>
                                   {ch.name}
@@ -1076,14 +1049,13 @@ export default function App() {
                               </div>
                             </div>
 
-                            {/* Indicators of Live & Country */}
                             <div className="flex flex-col items-end gap-1 flex-shrink-0">
                               {isDead ? (
                                 <span className="bg-red-900 border border-red-700 text-[8px] text-red-400 px-1.5 py-0.5 rounded uppercase font-bold">
                                   DEAD
                                 </span>
                               ) : ch.isLive ? (
-                                <span className="flex items-center gap-1 bg-red-600 px-1.5 py-0.5 rounded text-[8px] text-white font-extrabold tracking-wider animate-pulse uppercase">
+                                <span className="flex items-center gap-1 bg-red-600 px-1.5 py-0.5 rounded text-[8px] text-white font-extrabold tracking-wider uppercase">
                                   <span>LIVE</span>
                                 </span>
                               ) : (
@@ -1110,7 +1082,7 @@ export default function App() {
             {/* LOWER CONTENT: ORGANISED SECTIONS WITH EXPANDED DECK */}
             <div className="space-y-4 pt-4 border-t border-zinc-900">
               
-              {/* FAVORITE SECTION DECK (Only display if exists) */}
+              {/* FAVORITE SECTION DECK */}
               {favoriteChannels.length > 0 && (
                 <div id="favs-section" className="bg-zinc-950/20 p-5 rounded-2xl border border-rose-950/20 shadow-md">
                   <div className="flex items-center gap-2 mb-4">
@@ -1165,11 +1137,11 @@ export default function App() {
               <div className="bg-gradient-to-r from-amber-500/10 via-amber-600/5 to-zinc-950 p-6 rounded-3xl border border-amber-500/20 shadow-md">
                 <div className="flex items-center justify-between mb-4 pb-2 border-b border-zinc-900">
                   <div className="flex items-center gap-2.5">
-                    <span className="text-2xl animate-bounce self-center">🏆</span>
+                    <span className="text-2xl self-center">🏆</span>
                     <div>
                       <h3 className="text-sm font-black uppercase text-amber-400 tracking-wide flex items-center gap-2">
                         {isBengali ? "ফিফা বিশ্বকাপ ডেডিকেটেড সম্প্রচার" : "FIFA World Cup Streams"}
-                        <span className="bg-red-500 text-white font-mono text-[9px] px-1.5 py-0.5 rounded animate-pulse">DIRECT</span>
+                        <span className="bg-red-500 text-white font-mono text-[9px] px-1.5 py-0.5 rounded">DIRECT</span>
                       </h3>
                       <p className="text-[10px] text-zinc-400 font-sans">
                         {isBengali ? "সরাসরি মাঠ থেকে লাইভ হাই ডেফিনিশন ফিড ও পার্টনার টিভি চ্যানেল সমূহ" : "High-definition camera streams & official broadcasting partners"}
@@ -1195,7 +1167,6 @@ export default function App() {
                         : "No active FIFA feeds parsed right now. Broadcast triggers as soon as the matches go live on the official channels."}
                     </p>
                     
-                    {/* Fallback Live Football streams inside FIFA bento box for quick exploration */}
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-4 w-full">
                       {processedChannels.filter(ch => ch.isFootball && !deadLinks.has(ch.id)).slice(0, 4).map(ch => (
                         <div
@@ -1245,12 +1216,12 @@ export default function App() {
                             <div>
                               <h4 className="text-xs font-black text-zinc-200 line-clamp-1">
                                 {ch.name}
-                                {isLive && <span className="ml-1.5 text-[8px] bg-red-500 text-white px-1 py-0.5 rounded animate-pulse">LIVE</span>}
+                                {isLive && <span className="ml-1.5 text-[8px] bg-red-500 text-white px-1 py-0.5 rounded">LIVE</span>}
                               </h4>
                               <p className="text-[10px] text-zinc-500 mt-0.5">{getCountryEmoji(ch.countryCode)} {ch.country}</p>
                             </div>
                           </div>
-                          {isLive && <span className="animate-ping w-1.5 h-1.5 rounded-full bg-red-500" />}
+                          {isLive && <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block"></span>}
                           {isDead && <span className="text-red-500 text-[8px] font-bold uppercase">Dead</span>}
                           {!isLive && !isDead && <span className="text-amber-500/50 text-[8px] font-bold uppercase">Ready</span>}
                         </div>
@@ -1314,9 +1285,9 @@ export default function App() {
                             <div className="flex items-center justify-between mt-1 text-[9px] text-zinc-500">
                               <span>{ch.country}</span>
                               {isDead ? (
-                                <span className="text-red-500 font-bold tracking-wider uppercase">🔴 DEAD</span>
+                                <span className="text-red-500 font-bold tracking-wider uppercase">DEAD</span>
                               ) : ch.isLive && (
-                                <span className="text-red-400 font-bold tracking-wider uppercase">🔴 LIVE</span>
+                                <span className="text-red-400 font-bold tracking-wider uppercase">LIVE</span>
                               )}
                             </div>
                           </div>
@@ -1377,9 +1348,9 @@ export default function App() {
                             <div className="flex items-center justify-between mt-1 text-[9px] text-zinc-500">
                               <span>{ch.country}</span>
                               {isDead ? (
-                                <span className="text-red-500 font-bold tracking-wider uppercase">🔴 DEAD</span>
+                                <span className="text-red-500 font-bold tracking-wider uppercase">DEAD</span>
                               ) : ch.isLive && (
-                                <span className="text-red-400 font-bold tracking-wider uppercase">🔴 LIVE</span>
+                                <span className="text-red-400 font-bold tracking-wider uppercase">LIVE</span>
                               )}
                             </div>
                           </div>
