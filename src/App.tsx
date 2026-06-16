@@ -20,7 +20,7 @@ export default function App() {
   });
 
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [activeCategory, setActiveCategory] = useState<SportCategory>('all');
+  const [activeCategory, setActiveCategory] = useState<SportCategory>('fifa'); // Changed default to FIFA
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [cachedAt, setCachedAt] = useState<number | null>(null);
@@ -126,6 +126,8 @@ export default function App() {
       const fifaChannel = findFIFAChannel(data.channels || []);
       if (fifaChannel) {
         setSelectedChannel(fifaChannel);
+        // Automatically set category to FIFA when FIFA channel is found
+        setActiveCategory('fifa');
       } else {
         // Fallback: Try to find any live channel
         const defaultCh = data.channels.find((ch: Channel) => ch.isLive) ||
@@ -175,6 +177,7 @@ export default function App() {
     // If there's a FIFA live channel and it's not currently selected, switch to it
     if (fifaLive && selectedChannel?.id !== fifaLive.id) {
       setSelectedChannel(fifaLive);
+      setActiveCategory('fifa'); // Ensure FIFA category is active
     }
   }, [channels, fifaMatches, deadLinks, selectedChannel]);
 
@@ -217,6 +220,7 @@ export default function App() {
     );
     if (fifaLive) {
       setSelectedChannel(fifaLive);
+      setActiveCategory('fifa');
       console.log(`Auto-switched to FIFA live: ${fifaLive.name}`);
       return;
     }
@@ -268,9 +272,9 @@ export default function App() {
       isDead: deadLinks.has(ch.id)
     }));
 
-    // Auto-sort: Live channels on top, dead links at bottom
+    // Auto-sort: FIFA channels get top priority, then Live channels
     return [...list].sort((a, b) => {
-      // FIFA World Cup channels get highest priority
+      // FIFA World Cup channels get absolute highest priority
       if (a.isFifa && !b.isFifa) return -1;
       if (!a.isFifa && b.isFifa) return 1;
 
@@ -491,9 +495,9 @@ export default function App() {
           </div>
         )}
 
-        {/* FIFA Live Status Banner */}
+        {/* FIFA Live Status Banner - Now with highest priority */}
         {fifaChannels.length > 0 && (
-          <div className="bg-gradient-to-r from-amber-500/20 via-amber-600/10 to-zinc-950 border border-amber-500/30 p-4 rounded-2xl flex items-center justify-between flex-wrap gap-3">
+          <div className="bg-gradient-to-r from-amber-500/30 via-amber-600/20 to-zinc-950 border-2 border-amber-500/50 p-4 rounded-2xl flex items-center justify-between flex-wrap gap-3 shadow-lg shadow-amber-500/10">
             <div className="flex items-center gap-3">
               <Trophy className="w-6 h-6 text-amber-500" />
               <div>
@@ -512,7 +516,7 @@ export default function App() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-red-500 inline-block"></span>
+              <span className="w-2 h-2 rounded-full bg-red-500 inline-block animate-pulse"></span>
               <span className="text-xs font-bold text-red-400">
                 {isBengali ? "সরাসরি সম্প্রচার" : "LIVE"}
               </span>
@@ -664,17 +668,17 @@ export default function App() {
                   </div>
                 )}
 
-                {/* FIFA World Cup Live Match Hub Banner - Removed animations */}
-                <div className="p-5 rounded-3xl bg-gradient-to-br from-amber-500/10 via-amber-600/5 to-zinc-950 border border-amber-500/20 shadow-xl relative overflow-hidden">
-                  <div className="absolute top-2 right-2 opacity-5 pointer-events-none transform translate-x-4 -translate-y-4 scale-150">
+                {/* FIFA World Cup Live Match Hub Banner - Now with enhanced visibility */}
+                <div className="p-5 rounded-3xl bg-gradient-to-br from-amber-500/20 via-amber-600/10 to-zinc-950 border-2 border-amber-500/30 shadow-xl shadow-amber-500/5 relative overflow-hidden">
+                  <div className="absolute top-2 right-2 opacity-10 pointer-events-none transform translate-x-4 -translate-y-4 scale-150">
                     <Trophy className="w-48 h-48 text-amber-500" />
                   </div>
 
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span>
-                        <span className="text-[10px] font-mono font-extrabold uppercase text-amber-400 tracking-widest bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20">
+                        <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block animate-pulse"></span>
+                        <span className="text-[10px] font-mono font-extrabold uppercase text-amber-400 tracking-widest bg-amber-500/20 px-2.5 py-1 rounded-full border border-amber-500/30">
                           FIFA World Cup Match Focus • ফিফা বিশ্বকাপ
                         </span>
                       </div>
@@ -691,7 +695,7 @@ export default function App() {
                     <button
                       id="view-fifa-filter"
                       onClick={() => setActiveCategory('fifa')}
-                      className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-black text-xs rounded-xl shadow-lg shadow-amber-500/10 hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer self-start sm:self-center"
+                      className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-black text-xs rounded-xl shadow-lg shadow-amber-500/20 hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer self-start sm:self-center"
                     >
                       {isBengali ? "বিশ্বকাপ চ্যানেলগুলো দেখুন" : "View World Cup Feeds"}
                     </button>
@@ -710,14 +714,15 @@ export default function App() {
                             onClick={() => {
                               if (!isDead) {
                                 setSelectedChannel(ch);
+                                setActiveCategory('fifa');
                                 window.scrollTo({ top: 120, behavior: 'smooth' });
                               }
                             }}
                             className={`p-3 rounded-2xl border cursor-pointer transition flex items-center justify-between ${
                               isDead ? 'opacity-50 cursor-not-allowed bg-red-950/10 border-red-500/20' :
                               isSelected
-                                ? 'bg-amber-500/10 border-amber-500/60 text-amber-300'
-                                : 'bg-zinc-900/40 hover:bg-zinc-900 border-zinc-900/60 hover:border-amber-500/20'
+                                ? 'bg-amber-500/20 border-amber-500/80 text-amber-300 shadow-lg shadow-amber-500/10'
+                                : 'bg-zinc-900/40 hover:bg-zinc-900 border-zinc-900/60 hover:border-amber-500/30'
                             }`}
                           >
                             <div className="flex items-center gap-2.5">
@@ -736,7 +741,7 @@ export default function App() {
                               </div>
                             </div>
                             {!isDead && ch.isLive && (
-                              <span className="w-2 h-2 rounded-full bg-red-500 inline-block"></span>
+                              <span className="w-2 h-2 rounded-full bg-red-500 inline-block animate-pulse"></span>
                             )}
                             {isDead && (
                               <span className="text-red-500 text-[8px] font-bold uppercase">Dead</span>
@@ -800,6 +805,7 @@ export default function App() {
                             onClick={() => {
                               if (!isDead) {
                                 setSelectedChannel(ch);
+                                if (ch.isFifa) setActiveCategory('fifa');
                                 window.scrollTo({ top: 120, behavior: 'smooth' });
                               }
                             }}
@@ -851,13 +857,31 @@ export default function App() {
               {/* DIRECTORY LISTING SIDEBAR (Take 1 column) */}
               <div className="flex flex-col gap-4">
                 
-                {/* CATEGORIES BUTTON FILTER */}
+                {/* CATEGORIES BUTTON FILTER - FIFA now prominently displayed */}
                 <div className="bg-zinc-900/50 p-3 rounded-2xl border border-zinc-900">
                   <span className="text-[10px] font-bold text-zinc-500 uppercase block mb-2 px-1 font-mono tracking-wider">
                     {isBengali ? "সম্প্রচার ক্যাটাগরি" : "Filter Sports Feed"}
                   </span>
                   <div className="grid grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-2">
                     
+                    <button
+                      id="cat-fifa"
+                      onClick={() => setActiveCategory('fifa')}
+                      className={`px-3 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition duration-150 col-span-2 lg:col-span-1 xl:col-span-2 ${
+                        activeCategory === 'fifa'
+                          ? 'bg-amber-500 text-zinc-950 font-black shadow-lg shadow-amber-500/30 border-2 border-amber-400'
+                          : 'bg-zinc-900 border border-amber-500/30 text-amber-400 hover:bg-amber-950/30'
+                      }`}
+                    >
+                      <Trophy className="w-4 h-4 text-amber-500 fill-amber-500/25" />
+                      <span>{isBengali ? "ফিফা বিশ্বকাপ" : "FIFA World Cup"}</span>
+                      {fifaChannels.filter(ch => !deadLinks.has(ch.id) && ch.isLive).length > 0 && (
+                        <span className="ml-auto text-[10px] bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full font-bold animate-pulse">
+                          {fifaChannels.filter(ch => !deadLinks.has(ch.id) && ch.isLive).length} LIVE
+                        </span>
+                      )}
+                    </button>
+
                     <button
                       id="cat-all"
                       onClick={() => setActiveCategory('all')}
@@ -908,24 +932,6 @@ export default function App() {
                     >
                       <span className="text-sm">⚽</span>
                       <span>{isBengali ? "ফুটবল সরাসরি" : "Football"}</span>
-                    </button>
-
-                    <button
-                      id="cat-fifa"
-                      onClick={() => setActiveCategory('fifa')}
-                      className={`px-3 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition duration-150 col-span-2 lg:col-span-1 xl:col-span-2 ${
-                        activeCategory === 'fifa'
-                          ? 'bg-amber-500 text-zinc-950 font-black shadow-lg shadow-amber-500/20'
-                          : 'bg-zinc-900 border border-amber-500/20 text-amber-400 hover:bg-amber-950/20'
-                      }`}
-                    >
-                      <Trophy className="w-4 h-4 text-amber-500 fill-amber-500/25" />
-                      <span>{isBengali ? "ফিফা বিশ্বকাপ" : "FIFA World Cup"}</span>
-                      {fifaChannels.filter(ch => !deadLinks.has(ch.id) && ch.isLive).length > 0 && (
-                        <span className="ml-auto text-[10px] bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full font-bold">
-                          {fifaChannels.filter(ch => !deadLinks.has(ch.id) && ch.isLive).length} LIVE
-                        </span>
-                      )}
                     </button>
 
                   </div>
@@ -996,6 +1002,7 @@ export default function App() {
                             onClick={() => {
                               if (!isDead) {
                                 setSelectedChannel(ch);
+                                if (ch.isFifa) setActiveCategory('fifa');
                                 window.scrollTo({ top: 120, behavior: 'smooth' });
                               }
                             }}
@@ -1030,7 +1037,7 @@ export default function App() {
                                   </span>
                                 )}
                                 {ch.isFifa && !isDead && (
-                                  <span className="absolute top-0 left-0 w-2.5 h-2.5 bg-amber-500 rounded-full border border-zinc-950" />
+                                  <span className="absolute top-0 left-0 w-2.5 h-2.5 bg-amber-500 rounded-full border border-zinc-950 animate-pulse" />
                                 )}
                               </div>
                               
@@ -1038,7 +1045,7 @@ export default function App() {
                                 <h4 className={`text-xs font-bold leading-tight transition ${isPlayingNow ? 'text-lime-400' : 'text-zinc-200'}`}>
                                   {ch.name}
                                   {ch.isFifa && !isDead && (
-                                    <span className="ml-1 text-[8px] bg-amber-500/20 text-amber-400 px-1 py-0.5 rounded">FIFA</span>
+                                    <span className="ml-1 text-[8px] bg-amber-500/30 text-amber-400 px-1 py-0.5 rounded font-bold">FIFA</span>
                                   )}
                                 </h4>
                                 <div className="flex items-center gap-1.5 mt-1 font-sans text-[10px] text-zinc-500">
@@ -1079,76 +1086,25 @@ export default function App() {
               
             </div>
 
-            {/* LOWER CONTENT: ORGANISED SECTIONS WITH EXPANDED DECK */}
+            {/* LOWER CONTENT: ORGANISED SECTIONS WITH EXPANDED DECK - FIFA section now appears first */}
             <div className="space-y-4 pt-4 border-t border-zinc-900">
               
-              {/* FAVORITE SECTION DECK */}
-              {favoriteChannels.length > 0 && (
-                <div id="favs-section" className="bg-zinc-950/20 p-5 rounded-2xl border border-rose-950/20 shadow-md">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Star className="w-5 h-5 text-rose-500 fill-rose-500" />
-                    <h3 className="text-base font-black uppercase text-rose-400">
-                      {isBengali ? "আপনার প্রিয় চ্যানেল সমূহ" : "Your Favorite Channels"}
-                    </h3>
-                    <span className="text-xs bg-rose-500/10 border border-rose-500/20 text-rose-400 px-2.5 py-0.5 rounded-full font-bold">
-                      {favoriteChannels.length}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {favoriteChannels.map(ch => (
-                      <div 
-                        id={`fav-card-${ch.id}`}
-                        key={ch.id}
-                        onClick={() => {
-                          if (!deadLinks.has(ch.id)) {
-                            setSelectedChannel(ch);
-                            window.scrollTo({ top: 120, behavior: 'smooth' });
-                          }
-                        }}
-                        className={`p-4 rounded-xl border cursor-pointer transition-all duration-200 flex items-center justify-between ${
-                          deadLinks.has(ch.id) ? 'opacity-50 cursor-not-allowed border-red-500/20 bg-red-950/5' :
-                          selectedChannel?.id === ch.id 
-                            ? 'bg-zinc-900 border-rose-500/60' 
-                            : 'bg-zinc-900/40 hover:bg-zinc-900 border-zinc-900'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-lg bg-zinc-900 p-1 border border-zinc-800 flex items-center justify-center">
-                            {ch.logo ? <img src={ch.logo} className="w-full h-full object-contain" alt="" referrerPolicy="no-referrer" /> : <Tv className="w-5 h-5 text-rose-400" />}
-                          </div>
-                          <div>
-                            <h4 className="text-xs font-bold text-white line-clamp-1">{ch.name}</h4>
-                            <p className="text-[10px] text-zinc-500 mt-0.5">{getCountryEmoji(ch.countryCode)} {ch.country}</p>
-                          </div>
-                        </div>
-                        {deadLinks.has(ch.id) ? (
-                          <span className="text-red-500 text-[8px] font-bold uppercase">Dead</span>
-                        ) : (
-                          <CheckCircle2 className="w-4 h-4 text-rose-500 flex-shrink-0" />
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* FIFA WORLD CUP DEDICATED STREAMING DECKS */}
-              <div className="bg-gradient-to-r from-amber-500/10 via-amber-600/5 to-zinc-950 p-6 rounded-3xl border border-amber-500/20 shadow-md">
+              {/* FIFA WORLD CUP DEDICATED STREAMING DECKS - Now appears first */}
+              <div className="bg-gradient-to-r from-amber-500/20 via-amber-600/10 to-zinc-950 p-6 rounded-3xl border-2 border-amber-500/30 shadow-lg shadow-amber-500/5">
                 <div className="flex items-center justify-between mb-4 pb-2 border-b border-zinc-900">
                   <div className="flex items-center gap-2.5">
-                    <span className="text-2xl self-center">🏆</span>
+                    <span className="text-2xl self-center animate-pulse">🏆</span>
                     <div>
                       <h3 className="text-sm font-black uppercase text-amber-400 tracking-wide flex items-center gap-2">
                         {isBengali ? "ফিফা বিশ্বকাপ ডেডিকেটেড সম্প্রচার" : "FIFA World Cup Streams"}
-                        <span className="bg-red-500 text-white font-mono text-[9px] px-1.5 py-0.5 rounded">DIRECT</span>
+                        <span className="bg-red-500 text-white font-mono text-[9px] px-1.5 py-0.5 rounded animate-pulse">DIRECT</span>
                       </h3>
                       <p className="text-[10px] text-zinc-400 font-sans">
                         {isBengali ? "সরাসরি মাঠ থেকে লাইভ হাই ডেফিনিশন ফিড ও পার্টনার টিভি চ্যানেল সমূহ" : "High-definition camera streams & official broadcasting partners"}
                       </p>
                     </div>
                   </div>
-                  <span className="text-xs font-bold text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20">
+                  <span className="text-xs font-bold text-amber-400 bg-amber-500/20 px-2.5 py-1 rounded-lg border border-amber-500/30">
                     {fifaChannels.filter(ch => !deadLinks.has(ch.id) && ch.isLive).length > 0 
                       ? `${fifaChannels.filter(ch => !deadLinks.has(ch.id) && ch.isLive).length} LIVE` 
                       : fifaChannels.filter(ch => !deadLinks.has(ch.id)).length > 0 
@@ -1197,16 +1153,17 @@ export default function App() {
                           onClick={() => {
                             if (!isDead) {
                               setSelectedChannel(ch);
+                              setActiveCategory('fifa');
                               window.scrollTo({ top: 120, behavior: 'smooth' });
                             }
                           }}
                           className={`p-3.5 rounded-2xl border text-left cursor-pointer transition flex items-center justify-between ${
                             isDead ? 'opacity-50 cursor-not-allowed bg-red-950/5 border-red-500/20' :
                             selectedChannel?.id === ch.id 
-                              ? 'bg-amber-500/10 border-amber-500 text-amber-400' 
+                              ? 'bg-amber-500/20 border-amber-500 text-amber-400 shadow-lg shadow-amber-500/10' 
                               : isLive
-                                ? 'bg-amber-500/5 border-amber-500/30 hover:bg-amber-500/10'
-                                : 'bg-zinc-900/40 hover:bg-zinc-900 border-zinc-900 hover:border-amber-500/25'
+                                ? 'bg-amber-500/10 border-amber-500/40 hover:bg-amber-500/20'
+                                : 'bg-zinc-900/40 hover:bg-zinc-900 border-zinc-900 hover:border-amber-500/30'
                           }`}
                         >
                           <div className="flex items-center gap-3">
@@ -1216,12 +1173,12 @@ export default function App() {
                             <div>
                               <h4 className="text-xs font-black text-zinc-200 line-clamp-1">
                                 {ch.name}
-                                {isLive && <span className="ml-1.5 text-[8px] bg-red-500 text-white px-1 py-0.5 rounded">LIVE</span>}
+                                {isLive && <span className="ml-1.5 text-[8px] bg-red-500 text-white px-1 py-0.5 rounded animate-pulse">LIVE</span>}
                               </h4>
                               <p className="text-[10px] text-zinc-500 mt-0.5">{getCountryEmoji(ch.countryCode)} {ch.country}</p>
                             </div>
                           </div>
-                          {isLive && <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block"></span>}
+                          {isLive && <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block animate-pulse"></span>}
                           {isDead && <span className="text-red-500 text-[8px] font-bold uppercase">Dead</span>}
                           {!isLive && !isDead && <span className="text-amber-500/50 text-[8px] font-bold uppercase">Ready</span>}
                         </div>
@@ -1230,6 +1187,58 @@ export default function App() {
                   </div>
                 )}
               </div>
+
+              {/* FAVORITE SECTION DECK */}
+              {favoriteChannels.length > 0 && (
+                <div id="favs-section" className="bg-zinc-950/20 p-5 rounded-2xl border border-rose-950/20 shadow-md">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Star className="w-5 h-5 text-rose-500 fill-rose-500" />
+                    <h3 className="text-base font-black uppercase text-rose-400">
+                      {isBengali ? "আপনার প্রিয় চ্যানেল সমূহ" : "Your Favorite Channels"}
+                    </h3>
+                    <span className="text-xs bg-rose-500/10 border border-rose-500/20 text-rose-400 px-2.5 py-0.5 rounded-full font-bold">
+                      {favoriteChannels.length}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {favoriteChannels.map(ch => (
+                      <div 
+                        id={`fav-card-${ch.id}`}
+                        key={ch.id}
+                        onClick={() => {
+                          if (!deadLinks.has(ch.id)) {
+                            setSelectedChannel(ch);
+                            if (ch.isFifa) setActiveCategory('fifa');
+                            window.scrollTo({ top: 120, behavior: 'smooth' });
+                          }
+                        }}
+                        className={`p-4 rounded-xl border cursor-pointer transition-all duration-200 flex items-center justify-between ${
+                          deadLinks.has(ch.id) ? 'opacity-50 cursor-not-allowed border-red-500/20 bg-red-950/5' :
+                          selectedChannel?.id === ch.id 
+                            ? 'bg-zinc-900 border-rose-500/60' 
+                            : 'bg-zinc-900/40 hover:bg-zinc-900 border-zinc-900'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-lg bg-zinc-900 p-1 border border-zinc-800 flex items-center justify-center">
+                            {ch.logo ? <img src={ch.logo} className="w-full h-full object-contain" alt="" referrerPolicy="no-referrer" /> : <Tv className="w-5 h-5 text-rose-400" />}
+                          </div>
+                          <div>
+                            <h4 className="text-xs font-bold text-white line-clamp-1">{ch.name}</h4>
+                            <p className="text-[10px] text-zinc-500 mt-0.5">{getCountryEmoji(ch.countryCode)} {ch.country}</p>
+                          </div>
+                        </div>
+                        {deadLinks.has(ch.id) ? (
+                          <span className="text-red-500 text-[8px] font-bold uppercase">Dead</span>
+                        ) : (
+                          <CheckCircle2 className="w-4 h-4 text-rose-500 flex-shrink-0" />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* CRICKET AND FOOTBALL BEAUTIFUL BENTO DECK SECTIONS */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
