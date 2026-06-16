@@ -29,7 +29,6 @@ export default function App() {
   const [playlistLastUpdated, setPlaylistLastUpdated] = useState<string>('');
   const [playlistLastUpdatedBn, setPlaylistLastUpdatedBn] = useState<string>('');
   const [commitSha, setCommitSha] = useState<string>('');
-  const [initialAutoPlayDone, setInitialAutoPlayDone] = useState<boolean>(false);
 
   // Track dead links
   const [deadLinks, setDeadLinks] = useState<Set<string>>(new Set());
@@ -123,19 +122,16 @@ export default function App() {
       // Reset dead links on fresh fetch
       setDeadLinks(new Set());
 
-      // Auto-play: Try to find and play FIFA World Cup live channel
-      const fifaLiveChannel = findFIFALiveChannel(data.channels || []);
-      if (fifaLiveChannel) {
-        setSelectedChannel(fifaLiveChannel);
-        setInitialAutoPlayDone(true);
+      // Auto-play: Try to find and play FIFA World Cup channel (live or any FIFA channel)
+      const fifaChannel = findFIFAChannel(data.channels || []);
+      if (fifaChannel) {
+        setSelectedChannel(fifaChannel);
       } else {
-        // Fallback: Try to find any live cricket/football or first live channel
-        const defaultCh = data.channels.find((ch: Channel) => ch.isCricket && ch.isLive) ||
-                          data.channels.find((ch: Channel) => ch.isLive) ||
+        // Fallback: Try to find any live channel
+        const defaultCh = data.channels.find((ch: Channel) => ch.isLive) ||
                           data.channels[0];
         if (defaultCh) {
           setSelectedChannel(defaultCh);
-          setInitialAutoPlayDone(true);
         }
       }
     } catch (err: any) {
@@ -147,21 +143,15 @@ export default function App() {
     }
   };
 
-  // Helper function to find FIFA World Cup live channel
-  const findFIFALiveChannel = (channelList: Channel[]) => {
+  // Helper function to find FIFA World Cup channel (prioritize live ones)
+  const findFIFAChannel = (channelList: Channel[]) => {
     // First priority: FIFA channel that is live
     const fifaLive = channelList.find((ch: Channel) => 
-      ch.isFifa && ch.isLive && ch.name.toLowerCase().includes('fifa')
+      ch.isFifa && ch.isLive
     );
     if (fifaLive) return fifaLive;
 
-    // Second priority: Any FIFA related channel that is live
-    const fifaRelated = channelList.find((ch: Channel) => 
-      ch.isFifa && ch.isLive
-    );
-    if (fifaRelated) return fifaRelated;
-
-    // Third priority: FIFA channel (even if not marked live)
+    // Second priority: Any FIFA related channel
     const fifaAny = channelList.find((ch: Channel) => 
       ch.isFifa
     );
@@ -425,10 +415,7 @@ export default function App() {
           <div className="flex items-center gap-3">
             <div className="relative flex items-center justify-center bg-gradient-to-br from-lime-400 to-emerald-500 p-2.5 rounded-2xl shadow-lg shadow-lime-500/10 active:scale-95 transition-all">
               <Tv className="w-6 h-6 text-zinc-950" />
-              <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-red-500 border-2 border-zinc-950" />
-              </span>
+              {/* Removed red animation dot from top-right */}
             </div>
             <div>
               <div className="flex items-center gap-1.5">
