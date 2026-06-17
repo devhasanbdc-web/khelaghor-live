@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import Hls from 'hls.js';
 import { 
   Play, Pause, Volume2, VolumeX, Maximize, Minimize, 
-  RotateCcw, Shield, Radio, Tv, Settings, Info, Heart
+  RotateCcw, Radio, Tv, Settings, Check, Heart
 } from 'lucide-react';
 import { Channel } from '../types';
 
@@ -12,6 +12,7 @@ interface VideoPlayerProps {
   onToggleFavorite: () => void;
   onNextChannel?: () => void;
   onPrevChannel?: () => void;
+  onStreamError: (channelId: string) => void; 
 }
 
 export default function VideoPlayer({ 
@@ -19,13 +20,14 @@ export default function VideoPlayer({
   isFavorite, 
   onToggleFavorite,
   onNextChannel,
-  onPrevChannel
+  onPrevChannel,
+  onStreamError
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const hlsRef = useRef<Hls | null>(null);
 
-  // States
+  // Core Media Controllers
   const [isPlaying, setIsPlaying] = useState<boolean>(true);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [volume, setVolume] = useState<number>(1);
@@ -33,22 +35,20 @@ export default function VideoPlayer({
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [showControls, setShowControls] = useState<boolean>(true);
-  const [showStats, setShowStats] = useState<boolean>(false);
-  const [stats, setStats] = useState({ fps: 0, dropped: 0, height: 0, width: 0 });
+  
+  // Adaptive / Manual Video Quality States
+  const [qualities, setQualities] = useState<Array<{ id: number; name: string }>>([]);
+  const [currentQuality, setCurrentQuality] = useState<number>(-1); // -1 targets Auto Adaptive Bitrate
+  const [showQualityMenu, setShowQualityMenu] = useState<boolean>(false);
 
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Auto-hide controls handler
   const resetControlsTimeout = () => {
     setShowControls(true);
-    if (controlsTimeoutRef.current) {
-      clearTimeout(controlsTimeoutRef.current);
-    }
+    if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
     controlsTimeoutRef.current = setTimeout(() => {
-      if (isPlaying) {
-        setShowControls(false);
-      }
-    }, 3000);
+      if (isPlaying) setShowControls(false);
+    }, 3500);
   };
 
   useEffect(() => {
@@ -58,40 +58,38 @@ export default function VideoPlayer({
     };
   }, [isPlaying]);
 
-  // Handle HLS stream loading and native fallback
+  // Handle stream initialization, fallback, error handling, and manual streaming profiles
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
-    // Reset state
     setIsLoading(true);
     setErrorMsg(null);
     setIsPlaying(true);
+    setQualities([]);
+    setCurrentQuality(-1);
 
-    // Destroy existing HLS instance
     if (hlsRef.current) {
       hlsRef.current.destroy();
       hlsRef.current = null;
     }
 
     const streamUrl = channel.url;
-
     if (!streamUrl) {
-      setErrorMsg("কোন স্ট্রিমিং লিঙ্ক পাওয়া যায়নি (No stream URL found)");
+      setErrorMsg("No streaming link matched.");
       setIsLoading(false);
+      onStreamError(channel.id);
       return;
     }
 
-    // Match HTML video audio status immediately
     video.muted = isMuted;
 
-    // 1. Robust Chrome/Firefox cross-browser HLS support (Prefer Hls.js first)
     if (Hls.isSupported()) {
       const hls = new Hls({
-        maxMaxBufferLength: 20,
+        maxMaxBufferLength: 15,
         enableWorker: true,
         lowLatencyMode: true,
-        backBufferLength: 15
+        abrEwmaDefaultEstimate: 5000000 // Force high fallback standard initially
       });
       hlsRef.current = hls;
 
@@ -100,68 +98,53 @@ export default function VideoPlayer({
 
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         setIsLoading(false);
+        
+        // Dynamic Parsing of available streaming resolutions (Manual Quality Switcher profiles)
+        const availableLevels = hls.levels.map((level, index) => ({
+          id: index,
+          name: level.height ? `${level.height}p` : `Profile ${index + 1}`
+        }));
+        setQualities(availableLevels);
+
         video.play()
-          .then(() => {
-            setIsPlaying(true);
-          })
-          .catch((playErr) => {
-            console.warn("Autoplay blocked, trying automatic muted play:", playErr);
-            // Auto mute to satisfy browser document-interaction request rules
+          .then(() => setIsPlaying(true))
+          .catch(() => {
             video.muted = true;
             setIsMuted(true);
-            video.play()
-              .then(() => {
-                setIsPlaying(true);
-              })
-              .catch((muteErr) => {
-                console.warn("Muted play also blocked. Awaiting user tap:", muteErr);
-                setIsPlaying(false);
-              });
+            video.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
           });
       });
 
+      // Stream Error intercept -> Triggers automatic sequential failover instantly
       hls.on(Hls.Events.ERROR, (event, data) => {
-        console.warn("HLS Error:", data);
         if (data.fatal) {
           switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
-              console.log("Fatal network error, trying helper recovery...");
+              console.warn("Network error encountered, attempting recovery load...");
               hls.startLoad();
               break;
             case Hls.ErrorTypes.MEDIA_ERROR:
-              console.log("Fatal media error, trying helper recovery...");
+              console.warn("Media decoding anomaly, attempting automatic recovery pipeline...");
               hls.recoverMediaError();
               break;
             default:
-              setErrorMsg("লাইভ সম্প্রচারটি সাময়িকভাবে অনুপলব্ধ। দয়া করে কিছুক্ষণ পর আবার চেষ্টা করুন বা অন্য চ্যানেল দেখুন।");
+              console.error("Fatal unrecoverable HLS breakdown. Auto skipping dead link...");
               setIsLoading(false);
               hls.destroy();
+              onStreamError(channel.id); // Triggers parent App component to auto-play next ssc
               break;
           }
         }
       });
 
-      // Stats monitoring
-      const statsInterval = setInterval(() => {
-        if (video) {
-          setStats({
-            fps: (video as any).webkitDecodedFrameCount ? Math.round(((video as any).webkitDecodedFrameCount) / video.currentTime) : 30,
-            dropped: (video as any).webkitDroppedFrameCount || 0,
-            height: video.videoHeight || 0,
-            width: video.videoWidth || 0
-          });
-        }
-      }, 2000);
-
       return () => {
-        clearInterval(statsInterval);
         if (hlsRef.current) {
           hlsRef.current.destroy();
           hlsRef.current = null;
         }
       };
     } 
-    // 2. Safari / iOS / Native HTML5 player (Fallback secondary preference)
+    // Native Safari / Apple HLS Engine fallback strategy
     else if (video.canPlayType('application/vnd.apple.mpegurl')) {
       video.src = streamUrl;
       video.load();
@@ -170,385 +153,147 @@ export default function VideoPlayer({
           setIsPlaying(true);
           setIsLoading(false);
         })
-        .catch((err) => {
-          console.warn("Native play blocked, attempting muted mode:", err);
-          video.muted = true;
-          setIsMuted(true);
-          video.play()
-            .then(() => {
-              setIsPlaying(true);
-              setIsLoading(false);
-            })
-            .catch((muteErr) => {
-              console.warn("Native muted autoplay also blocked:", muteErr);
-              setIsPlaying(false);
-              setIsLoading(false);
-            });
-        });
-    } else {
-      setErrorMsg("আপনার ব্রাউজারে এই লাইভ স্ট্রিম প্লে করা সম্ভব নয়। অন্য ব্রাউজারে চেষ্টা করুন।");
-      setIsLoading(false);
-    }
-  }, [channel.url]);
-
-  // Video Action handlers
-  const handlePlayPause = () => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    if (isPlaying) {
-      video.pause();
-      setIsPlaying(false);
-    } else {
-      video.play()
-        .then(() => {
-          setIsPlaying(true);
-          setErrorMsg(null);
-        })
         .catch(() => {
           video.muted = true;
           setIsMuted(true);
-          video.play().then(() => setIsPlaying(true));
+          video.play().then(() => {
+            setIsPlaying(true);
+            setIsLoading(false);
+          }).catch(() => {
+            setIsLoading(false);
+            onStreamError(channel.id);
+          });
         });
+    } else {
+      setErrorMsg("HLS streaming format not natively supported on this browser profile.");
+      setIsLoading(false);
+      onStreamError(channel.id);
+    }
+  }, [channel.url]);
+
+  // Quality profile switcher callback handler
+  const changeVideoQuality = (levelId: number) => {
+    if (!hlsRef.current) return;
+    setCurrentQuality(levelId);
+    hlsRef.current.currentLevel = levelId; // Assigning -1 forces immediate dynamic auto-adaptive mode back
+    setShowQualityMenu(false);
+  };
+
+  const handlePlayPause = () => {
+    if (!videoRef.current) return;
+    if (isPlaying) {
+      videoRef.current.pause();
+      setIsPlaying(false);
+    } else {
+      videoRef.current.play().then(() => setIsPlaying(true));
     }
     resetControlsTimeout();
   };
 
   const handleMuteToggle = () => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    const newMute = !isMuted;
-    video.muted = newMute;
-    setIsMuted(newMute);
-    if (!newMute && volume === 0) {
-      video.volume = 0.5;
-      setVolume(0.5);
-    }
-    resetControlsTimeout();
-  };
-
-  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    const val = parseFloat(e.target.value);
-    video.volume = val;
-    setVolume(val);
-    if (val === 0) {
-      video.muted = true;
-      setIsMuted(true);
-    } else {
-      video.muted = false;
-      setIsMuted(false);
-    }
+    if (!videoRef.current) return;
+    const nextMute = !isMuted;
+    videoRef.current.muted = nextMute;
+    setIsMuted(nextMute);
     resetControlsTimeout();
   };
 
   const toggleFullscreen = () => {
-    const container = containerRef.current;
-    if (!container) return;
-
+    if (!containerRef.current) return;
     if (!document.fullscreenElement) {
-      container.requestFullscreen()
-        .then(() => setIsFullscreen(true))
-        .catch(err => console.error("Error going fullscreen:", err));
+      containerRef.current.requestFullscreen().then(() => setIsFullscreen(true));
     } else {
-      document.exitFullscreen()
-        .then(() => setIsFullscreen(false))
-        .catch(err => console.error("Error exiting fullscreen:", err));
+      document.exitFullscreen().then(() => setIsFullscreen(false));
     }
     resetControlsTimeout();
-  };
-
-  // Monitor fullscreen change events (when user triggers via ESC key)
-  useEffect(() => {
-    const onFsChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
-    };
-    document.addEventListener('fullscreenchange', onFsChange);
-    return () => document.removeEventListener('fullscreenchange', onFsChange);
-  }, []);
-
-  const handleRefresh = () => {
-    const video = videoRef.current;
-    if (!video) return;
-    setErrorMsg(null);
-    setIsLoading(true);
-    if (hlsRef.current) {
-      hlsRef.current.destroy();
-    }
-    const streamUrl = channel.url;
-    if (Hls.isSupported()) {
-      const hls = new Hls();
-      hlsRef.current = hls;
-      hls.loadSource(streamUrl);
-      hls.attachMedia(video);
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        setIsLoading(false);
-        video.play().then(() => setIsPlaying(true));
-      });
-    } else {
-      video.src = streamUrl;
-      video.load();
-      video.play().then(() => {
-        setIsPlaying(true);
-        setIsLoading(false);
-      });
-    }
-  };
-
-  const getCountryEmoji = (code: string) => {
-    if (!code || code === 'un') return '🌐';
-    const codePoints = code
-      .toUpperCase()
-      .split('')
-      .map(char =>  127397 + char.charCodeAt(0));
-    try {
-      return String.fromCodePoint(...codePoints);
-    } catch {
-      return '🌐';
-    }
   };
 
   return (
     <div 
       ref={containerRef}
-      id="live-stadium-canvas"
-      className="relative w-full aspect-video rounded-2xl bg-zinc-950 overflow-hidden shadow-2xl border border-zinc-800 focus:outline-none group"
+      className="relative w-full aspect-video rounded-2xl bg-zinc-950 overflow-hidden shadow-2xl border border-zinc-900 group"
       onMouseMove={resetControlsTimeout}
       onMouseLeave={() => isPlaying && setShowControls(false)}
     >
-      {/* Actual HTML Video Element */}
       <video
         ref={videoRef}
-        className="w-full h-full object-contain pointer-events-auto cursor-pointer"
+        className="w-full h-full object-contain"
         onClick={handlePlayPause}
         playsInline
-        muted={isMuted}
       />
 
-      {/* Centered Floating Play Button Overlay (when autoplay-blocked or paused) */}
-      {!isPlaying && !isLoading && !errorMsg && (
-        <div 
-          onClick={handlePlayPause}
-          className="absolute inset-0 flex items-center justify-center bg-zinc-950/45 cursor-pointer z-10 hover:bg-zinc-950/30 transition-all duration-300"
-        >
-          <div className="p-5 bg-lime-500 hover:bg-lime-400 text-zinc-950 hover:scale-110 active:scale-95 rounded-full shadow-2xl shadow-lime-500/30 transition duration-300 flex items-center justify-center relative">
-            <Play className="w-8 h-8 fill-current translate-x-0.5" />
-            <span className="absolute -inset-2 rounded-full border border-lime-500/35 animate-ping duration-1000" />
+      {/* Floating Center Trigger Overlay */}
+      {!isPlaying && !isLoading && (
+        <div onClick={handlePlayPause} className="absolute inset-0 flex items-center justify-center bg-black/40 cursor-pointer z-10">
+          <div className="p-4 bg-amber-500 text-zinc-950 rounded-full shadow-xl">
+            <Play className="w-7 h-7 fill-current translate-x-0.5" />
           </div>
-          <span className="absolute bottom-1/4 text-xs font-mono tracking-wider font-extrabold text-lime-400 bg-zinc-950/80 border border-zinc-800 px-3 py-1.5 rounded-xl uppercase">
-            অনলাইনে দেখতে এখানে ক্লিক করুন (Tap to Play Live Feed)
-          </span>
         </div>
       )}
 
-      {/* Loading Overlay / Spinner */}
+      {/* Adaptive Spinner Loading Canvas */}
       {isLoading && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-950/90 z-20 backdrop-blur-sm animate-fade-in">
-          <div className="relative flex items-center justify-center">
-            {/* Pulsing neon stadium ring */}
-            <div className="absolute w-20 h-20 rounded-full border-4 border-lime-500/20 border-t-lime-400 border-r-lime-400 animate-spin" />
-            <Radio className="w-8 h-8 text-lime-400 animate-pulse duration-1000" />
-          </div>
-          <p className="mt-5 text-lime-400 font-mono text-sm tracking-widest animate-pulse">
-            LOADING STADIUM FEED...
-          </p>
-          <span className="text-zinc-500 text-xs mt-1 font-sans">
-            চ্যানেল লোড হচ্ছে, দয়া করে অপেক্ষা করুন...
-          </span>
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-950/90 z-20 backdrop-blur-sm">
+          <div className="w-12 h-12 rounded-full border-4 border-amber-500/20 border-t-amber-500 animate-spin mb-3" />
+          <p className="text-xs font-mono tracking-wider text-amber-500 uppercase animate-pulse">Synchronizing Stadium Bitrates...</p>
         </div>
       )}
 
-      {/* Error / Offline Overlay */}
-      {errorMsg && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-950/95 z-20 px-6 text-center">
-          <div className="p-3 bg-red-950/50 rounded-full border border-red-500/30 text-red-400 mb-4 animate-bounce">
-            <Tv className="w-8 h-8" />
-          </div>
-          <h3 className="text-white font-bold text-lg mb-2 Bengali-heading">
-            লাইভ সম্প্রচার লোড করা যায়নি
-          </h3>
-          <p className="text-zinc-400 text-sm max-w-md font-sans mb-5">
-            {errorMsg}
-          </p>
-          <div className="flex gap-3">
-            <button
-              id="retry-stream"
-              onClick={handleRefresh}
-              className="flex items-center gap-2 px-5 py-2.5 bg-lime-500 text-zinc-950 rounded-xl hover:bg-lime-400 active:scale-95 font-semibold text-xs transition duration-200 shadow-lg shadow-lime-500/20"
-            >
-              <RotateCcw className="w-4 h-4" /> পুনরায় চেষ্টা করুন (Retry Feed)
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Overlay Header Information - Channel info & Badge */}
-      <div 
-        className={`absolute top-0 inset-x-0 p-4 bg-gradient-to-b from-black/80 via-black/40 to-transparent flex items-center justify-between transition-all duration-300 z-10 ${
-          showControls ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4 pointer-events-none'
-        }`}
-      >
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-zinc-900/90 border border-zinc-700 p-1 flex items-center justify-center overflow-hidden">
-            {channel.logo ? (
-              <img 
-                src={channel.logo} 
-                alt={channel.name} 
-                className="w-full h-full object-contain" 
-                referrerPolicy="no-referrer"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = ""; // Clear and let fallback show
-                }}
-              />
-            ) : (
-              <Radio className="w-5 h-5 text-lime-400" />
-            )}
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h4 className="text-white font-semibold text-base tracking-wide flex items-center gap-1.5">
-                {channel.name}
-              </h4>
-              <span className="text-sm shadow-md" title={channel.country}>
-                {getCountryEmoji(channel.countryCode)}
-              </span>
-            </div>
-            <p className="text-xs text-zinc-400 font-mono tracking-wide">
-              {channel.group || 'Live Sports TV'}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {/* Favorite Badge */}
-          <button
-            id={`fav-btn-${channel.id}`}
-            onClick={onToggleFavorite}
-            className={`p-2.5 rounded-xl border transition-all duration-200 ${
-              isFavorite 
-                ? 'bg-rose-500/20 border-rose-500/50 text-rose-400 shadow-md shadow-rose-950/50' 
-                : 'bg-zinc-900/80 border-zinc-700/50 text-zinc-300 hover:text-white hover:bg-zinc-800'
-            }`}
-            title={isFavorite ? "পছন্দের তালিকা থেকে বাদ দিন" : "পছন্দের তালিকায় রাখুন"}
-          >
-            <Heart className={`w-4 h-4 ${isFavorite ? 'fill-rose-500' : ''}`} />
-          </button>
-
-          {/* Core Status display */}
-          <div className="flex items-center gap-1.5 bg-red-600 px-3 py-1.5 rounded-lg border border-red-500 shadow-lg text-white font-bold text-xs uppercase tracking-widest animate-pulse">
-            <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
-            <span>LIVE</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Advanced Stream Stats Panel Overlay */}
-      {showStats && (
-        <div className="absolute left-4 top-16 p-3 bg-zinc-950/90 backdrop-blur-md rounded-xl border border-lime-500/30 text-[10px] text-lime-400 font-mono space-y-1 z-10 w-48 shadow-lg">
-          <p className="text-zinc-400 font-bold border-b border-zinc-800 pb-1 mb-1">STREAM DIAGNOSTICS</p>
-          <p>Resolution: {stats.width}x{stats.height}</p>
-          <p>Target FPS: {stats.fps}</p>
-          <p>Frame Drops: {stats.dropped}</p>
-          <p>Decoder: {Hls.isSupported() ? 'Hls.js Engine' : 'HTML5 Native'}</p>
-        </div>
-      )}
-
-      {/* Media Controller Overlay Bar (Volume, Pause, Fullscreen, etc.) */}
-      <div 
-        className={`absolute bottom-0 inset-x-0 p-4 bg-gradient-to-t from-black/90 via-black/45 to-transparent flex flex-col gap-3 transition-all duration-300 z-10 ${
-          showControls ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'
-        }`}
-      >
+      {/* Controls Overlay UI Strip */}
+      <div className={`absolute bottom-0 inset-x-0 p-4 bg-gradient-to-t from-black via-black/40 to-transparent flex flex-col gap-3 transition-all duration-300 z-10 ${showControls ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}`}>
         <div className="flex items-center justify-between">
-          {/* Play/Pause/Reload */}
-          <div className="flex items-center gap-4">
-            <button
-              id="player-play-pause"
-              onClick={handlePlayPause}
-              className="p-3 bg-lime-500 text-zinc-950 hover:bg-lime-400 rounded-full transition duration-150 transform active:scale-90"
-            >
-              {isPlaying ? <Pause className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 fill-current" />}
+          <div className="flex items-center gap-3">
+            <button onClick={handlePlayPause} className="p-2.5 bg-amber-500 text-zinc-950 rounded-full transition">
+              {isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current" />}
             </button>
-
-            <button
-              id="player-refresh"
-              onClick={handleRefresh}
-              className="p-2 bg-zinc-900/80 border border-zinc-700/50 hover:bg-zinc-800 text-zinc-300 hover:text-white rounded-xl transition duration-150"
-              title="রিফ্রেশ করুন (Reload Feed)"
-            >
-              <RotateCcw className="w-4.5 h-4.5" />
-            </button>
-
-            {/* Prev/Next buttons if attached */}
-            {onPrevChannel && (
-              <button
-                id="player-prev-ch"
-                onClick={onPrevChannel}
-                className="p-2 bg-zinc-900/80 border border-zinc-700/50 hover:bg-zinc-800 text-zinc-300 hover:text-white rounded-xl transition duration-150 text-xs font-mono"
-                title="পূর্ববর্তী চ্যানেল (Previous Channel)"
-              >
-                ◀ PREV
-              </button>
-            )}
-            {onNextChannel && (
-              <button
-                id="player-next-ch"
-                onClick={onNextChannel}
-                className="p-2 bg-zinc-900/80 border border-zinc-700/50 hover:bg-zinc-800 text-zinc-300 hover:text-white rounded-xl transition duration-150 text-xs font-mono"
-                title="পরবর্তী চ্যানেল (Next Channel)"
-              >
-                NEXT ▶
-              </button>
-            )}
+            {onPrevChannel && <button onClick={onPrevChannel} className="px-2 py-1.5 bg-zinc-900/90 border border-zinc-800 text-zinc-300 rounded-lg text-[10px] font-mono">PREV</button>}
+            {onNextChannel && <button onClick={onNextChannel} className="px-2 py-1.5 bg-zinc-900/90 border border-zinc-800 text-zinc-300 rounded-lg text-[10px] font-mono">NEXT</button>}
           </div>
 
-          {/* Volume, Stats & Fullscreen controls */}
-          <div className="flex items-center gap-4">
-            {/* Stats toggle */}
-            <button
-              id="player-diagnostics"
-              onClick={() => setShowStats(!showStats)}
-              className={`p-2 rounded-xl border transition-all duration-150 ${
-                showStats 
-                  ? 'bg-lime-500/20 border-lime-400/50 text-lime-400' 
-                  : 'bg-zinc-900/80 border-zinc-700/50 text-zinc-400 hover:text-white'
-              }`}
-              title="স্ট্রিম ডায়াগনস্টিক তথ্য দেখুন"
-            >
-              <Info className="w-4 text-center block" />
+          <div className="flex items-center gap-3 relative">
+            {/* Manual Video Resolution / Bitrate Controller Widget */}
+            {qualities.length > 0 && (
+              <div className="relative">
+                <button 
+                  onClick={() => setShowQualityMenu(!showQualityMenu)}
+                  className="p-2 bg-zinc-900/90 border border-zinc-800 rounded-xl text-zinc-300 hover:text-white flex items-center gap-1 text-xs"
+                  title="ভিডিও কোয়ালিটি সেট করুন"
+                >
+                  <Settings className="w-4 h-4" />
+                  <span className="font-mono text-[10px]">
+                    {currentQuality === -1 ? "Auto" : qualities[currentQuality]?.name}
+                  </span>
+                </button>
+
+                {showQualityMenu && (
+                  <div className="absolute bottom-11 right-0 bg-zinc-950 border border-zinc-800 rounded-xl p-1.5 flex flex-col gap-1 w-28 z-30 shadow-2xl">
+                    <button
+                      onClick={() => changeVideoQuality(-1)}
+                      className={`px-2 py-1 text-left text-[11px] rounded-lg font-mono flex items-center justify-between ${currentQuality === -1 ? 'bg-amber-500/10 text-amber-400' : 'text-zinc-400'}`}
+                    >
+                      <span>Auto (Adaptive)</span>
+                      {currentQuality === -1 && <Check className="w-3 h-3" />}
+                    </button>
+                    {qualities.map((q) => (
+                      <button
+                        key={q.id}
+                        onClick={() => changeVideoQuality(q.id)}
+                        className={`px-2 py-1 text-left text-[11px] rounded-lg font-mono flex items-center justify-between ${currentQuality === q.id ? 'bg-amber-500/10 text-amber-400' : 'text-zinc-400'}`}
+                      >
+                        <span>{q.name}</span>
+                        {currentQuality === q.id && <Check className="w-3 h-3" />}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <button onClick={handleMuteToggle} className="text-zinc-400 hover:text-white">
+              {isMuted ? <VolumeX className="w-4 h-4 text-red-400" /> : <Volume2 className="w-4 h-4" />}
             </button>
-
-            {/* Volume Control widget */}
-            <div className="flex items-center gap-2 group/volume bg-zinc-900/80 border border-zinc-700/50 px-2.5 py-1.5 rounded-xl">
-              <button
-                id="player-mute"
-                onClick={handleMuteToggle}
-                className="text-zinc-400 hover:text-white transition duration-150"
-              >
-                {isMuted ? <VolumeX className="w-4 h-4 text-red-400" /> : <Volume2 className="w-4 h-4" />}
-              </button>
-              <input
-                id="volume-slider"
-                type="range"
-                min="0"
-                max="1"
-                step="0.05"
-                value={isMuted ? 0 : volume}
-                onChange={handleVolumeChange}
-                className="w-16 h-1 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-lime-400 group-hover/volume:w-20 transition-all duration-300"
-              />
-            </div>
-
-            {/* Fullscreen Button */}
-            <button
-              id="player-fullscreen"
-              onClick={toggleFullscreen}
-              className="p-2 bg-zinc-900/80 border border-zinc-700/50 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-xl transition duration-150"
-            >
-              {isFullscreen ? <Minimize className="w-4.5 h-4.5" /> : <Maximize className="w-4.5 h-4.5" />}
+            <button onClick={toggleFullscreen} className="text-zinc-400 hover:text-white">
+              {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
             </button>
           </div>
         </div>
